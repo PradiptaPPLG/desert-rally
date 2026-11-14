@@ -1,0 +1,4026 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Desert Rally Drift 3D (Godot Style)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        html, body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #e4be8a;
+            font-family: 'Inter', sans-serif;
+            cursor: none;
+        }
+
+        body.modal-active {
+            cursor: default;
+        }
+
+        #game-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 1;
+        }
+
+        /* Vignette halus khas rendering filmis Godot Engine */
+        .vignette-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 5;
+            background: radial-gradient(
+                circle at 50% 50%,
+                rgba(255, 232, 195, 0) 58%,
+                rgba(82, 48, 20, 0.22) 100%
+            );
+        }
+
+        /* HUD minimalis yang otomatis menghilang saat mobil dikendarai */
+        #hud-hint {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            pointer-events: none;
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        #hud-hint.hidden-hud {
+            opacity: 0;
+            transform: translateX(-50%) translateY(14px);
+        }
+
+        .key-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            margin: 0 2px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            font-weight: 700;
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            color: #fff8ec;
+        }
+
+        /* Modal Script Godot Engine 4 */
+        #godot-modal {
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(18, 13, 9, 0.78);
+            backdrop-filter: blur(8px);
+            padding: 20px;
+        }
+
+        #godot-modal.active {
+            display: flex;
+        }
+
+        .code-scroll::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        .code-scroll::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Canvas Utama WebGL Three.js -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Efek Gradasi Vignette Halus -->
+    <div class="vignette-layer"></div>
+
+    <!-- Petunjuk Kontrol Minimalis (Otomatis hilang saat jalan) -->
+    <div id="hud-hint">
+        <div class="px-5 py-2.5 rounded-full bg-stone-900/55 backdrop-blur-md border border-amber-100/20 text-amber-50/90 text-xs tracking-wide flex items-center gap-3 shadow-2xl">
+            <span><span class="key-badge">W</span><span class="key-badge">A</span><span class="key-badge">S</span><span class="key-badge">D</span> Mengemudi</span>
+            <span class="opacity-40">•</span>
+            <span><span class="key-badge">SPACE</span> Drift</span>
+            <span class="opacity-40">•</span>
+            <span><span class="key-badge">SHIFT</span> Turbo</span>
+            <span class="opacity-40">•</span>
+            <span><span class="key-badge">C</span> Kamera</span>
+            <span class="opacity-40">•</span>
+            <span><span class="key-badge">R</span> Reset</span>
+            <span class="opacity-40">•</span>
+            <span><span class="key-badge">G</span> Kode Godot 4</span>
+        </div>
+    </div>
+
+    <!-- Modal GDScript untuk Godot Engine 4 -->
+    <div id="godot-modal">
+        <div class="bg-stone-900 border border-amber-500/30 rounded-2xl max-w-3xl w-full overflow-hidden shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="px-6 py-4 bg-stone-800/80 border-b border-stone-700 flex items-center justify-between">
+                <div>
+                    <h2 class="text-amber-300 font-bold text-base tracking-wide">GODOT ENGINE 4.x — DESERT & BEACH RALLY GDSCRIPT</h2>
+                    <p class="text-stone-400 text-xs mt-0.5">Tekan tombol Salin atau tekan <span class="text-amber-200 font-semibold">G / ESC</span> untuk kembali ke game.</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="copy-gdscript-btn" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs transition">
+                        Salin GDScript
+                    </button>
+                    <button id="close-modal-btn" class="px-3 py-1.5 rounded-lg bg-stone-700 hover:bg-stone-600 text-stone-200 font-semibold text-xs transition">
+                        Tutup (ESC)
+                    </button>
+                </div>
+            </div>
+            <pre id="gdscript-content" class="p-5 text-xs font-mono text-amber-100/90 overflow-y-auto code-scroll leading-relaxed bg-stone-950/90">extends VehicleBody3D
+
+# ==============================================================================
+# GODOT 4.x DESERT & COASTAL BEACH DRIFT CONTROLLER
+# ==============================================================================
+@export var max_engine_force: float = 680.0
+@export var max_steering_angle: float = 0.46
+@export var steering_speed: float = 6.5
+@export var normal_rear_grip: float = 2.6
+@export var drift_rear_grip: float = 0.82
+
+@onready var wheel_fl: VehicleWheel3D = $WheelFL
+@onready var wheel_fr: VehicleWheel3D = $WheelFR
+@onready var wheel_rl: VehicleWheel3D = $WheelRL
+@onready var wheel_rr: VehicleWheel3D = $WheelRR
+@onready var sand_particles: GPUParticles3D = $SandDriftParticles
+
+func _ready() -> void:
+    Input.set_mouse_mode(Input.MOUSE_MODE_HIDDEN)
+
+func _physics_process(delta: float) -> void:
+    var throttle_in := Input.get_axis("move_back", "move_forward")
+    var steer_in := Input.get_axis("move_right", "move_left")
+    var is_drifting := Input.is_action_pressed("handbrake")
+    var is_boosting := Input.is_action_pressed("turbo")
+
+    var boost_mult := 1.45 if is_boosting else 1.0
+    engine_force = throttle_in * max_engine_force * boost_mult
+    steering = move_toward(steering, steer_in * max_steering_angle, steering_speed * delta)
+
+    if is_drifting:
+        wheel_rl.wheel_friction_slip = drift_rear_grip
+        wheel_rr.wheel_friction_slip = drift_rear_grip
+        brake = 2.5
+    else:
+        wheel_rl.wheel_friction_slip = normal_rear_grip
+        wheel_rr.wheel_friction_slip = normal_rear_grip
+        brake = 0.0
+
+    var lateral_vel := absf(global_transform.basis.x.dot(linear_velocity))
+    sand_particles.emitting = is_drifting or lateral_vel > 3.2</pre>
+        </div>
+    </div>
+
+    <script>
+        window.onload = function () {
+            // =========================================================================
+            // 1. INISIALISASI SCENE, RENDERER, KAMERA & PENCAHAYAAN GOLDEN HOUR GODOT
+            // =========================================================================
+            const canvas = document.getElementById('game-canvas');
+            const renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true,
+                powerPreference: 'high-performance'
+            });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.09;
+            renderer.outputEncoding = THREE.sRGBEncoding;
+
+            const scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdf9f64);
+            scene.fog = new THREE.FogExp2(0xdf9f64, 0.0015);
+
+            // Kamera Telephoto Sudut Tinggi persis seperti video referensi (FOV 26)
+            const camera = new THREE.PerspectiveCamera(26, window.innerWidth / window.innerHeight, 1.0, 1000);
+            let cameraMode = 0; // 0: Isometric Video Cam, 1: Low Rally Chase Cam, 2: Wide Island Cam
+            const cameraTarget = new THREE.Vector3(1.5, 2.2, 1.8);
+            const cameraOffset = new THREE.Vector3(0, 66, 54);
+
+            // Cahaya Langit & Pantulan Pasir Hangat
+            const hemiLight = new THREE.HemisphereLight(0xfff3db, 0x99653c, 0.66);
+            scene.add(hemiLight);
+
+            const ambientLight = new THREE.AmbientLight(0xf5d4a6, 0.25);
+            scene.add(ambientLight);
+
+            // Cahaya Matahari Sore (Golden Hour) dari sisi Kanan-Atas sehingga bayangan jatuh memanjang ke Kiri
+            const sunOffset = new THREE.Vector3(82, 37, -14);
+            const sunLight = new THREE.DirectionalLight(0xffe2b3, 1.58);
+            sunLight.position.copy(sunOffset);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            sunLight.shadow.camera.near = 10;
+            sunLight.shadow.camera.far = 240;
+            const shadowBox = 66;
+            sunLight.shadow.camera.left = -shadowBox;
+            sunLight.shadow.camera.right = shadowBox;
+            sunLight.shadow.camera.top = shadowBox;
+            sunLight.shadow.camera.bottom = -shadowBox;
+            sunLight.shadow.bias = -0.0004;
+            scene.add(sunLight);
+            scene.add(sunLight.target);
+
+            // =========================================================================
+            // 2. MATERIAL PALET STYLIZED GODOT
+            // =========================================================================
+            const woodLightMat = new THREE.MeshStandardMaterial({ color: 0x8f643e, roughness: 0.88 });
+            const woodDarkMat = new THREE.MeshStandardMaterial({ color: 0x593b22, roughness: 0.92 });
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x734b30, roughness: 0.78, metalness: 0.16 });
+            const darkWindowMat = new THREE.MeshStandardMaterial({ color: 0x1c140e, roughness: 0.35 });
+            const metalTrussMat = new THREE.MeshStandardMaterial({ color: 0x4b4743, roughness: 0.52, metalness: 0.65 });
+            const pillarRockMat = new THREE.MeshStandardMaterial({ color: 0xc98c58, roughness: 0.91, flatShading: true });
+            const rockMat = new THREE.MeshStandardMaterial({ color: 0xc28755, roughness: 0.9, flatShading: true });
+            const barrierMat = new THREE.MeshStandardMaterial({ color: 0xd9c8b0, roughness: 0.82 });
+            const barrierRedMat = new THREE.MeshStandardMaterial({ color: 0xba412f, roughness: 0.82 });
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x202022, roughness: 0.86 });
+            const deadBushMat = new THREE.MeshStandardMaterial({ color: 0x5c3f26, roughness: 0.95 });
+            const duneGrassMat = new THREE.MeshStandardMaterial({
+                color: 0xc89e61,
+                roughness: 0.92,
+                side: THREE.DoubleSide
+            });
+
+            const crateMat = new THREE.MeshStandardMaterial({ color: 0xb5804c, roughness: 0.85 });
+            const barrelRedMat = new THREE.MeshStandardMaterial({ color: 0xc93b2b, roughness: 0.45, metalness: 0.32 });
+            const barrelBlueMat = new THREE.MeshStandardMaterial({ color: 0x286494, roughness: 0.45, metalness: 0.32 });
+            const barrelYellowMat = new THREE.MeshStandardMaterial({ color: 0xdba028, roughness: 0.45, metalness: 0.32 });
+            const coneMat = new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.55 });
+            const palmTrunkMat = new THREE.MeshStandardMaterial({ color: 0x6e4c30, roughness: 0.92 });
+            const palmLeafMat = new THREE.MeshStandardMaterial({ color: 0x4d7c3a, roughness: 0.82, flatShading: true });
+            const cactusMat = new THREE.MeshStandardMaterial({ color: 0x3f6e36, roughness: 0.85 });
+            const rampStripeMat = new THREE.MeshStandardMaterial({ color: 0xeb9822, roughness: 0.7 });
+
+            // Material Tambahan untuk 7 Zona Open-World
+            const sandstoneMat = new THREE.MeshStandardMaterial({ color: 0xd9a870, roughness: 0.88, flatShading: true });
+            const stuccoCreamMat = new THREE.MeshStandardMaterial({ color: 0xebd8b7, roughness: 0.84 });
+            const brickRedMat = new THREE.MeshStandardMaterial({ color: 0xa64432, roughness: 0.86 });
+            const tealMetalMat = new THREE.MeshStandardMaterial({ color: 0x2b7a78, roughness: 0.45, metalness: 0.45 });
+            const rustOrangeMat = new THREE.MeshStandardMaterial({ color: 0xb8522a, roughness: 0.65, metalness: 0.35 });
+            const containerBlueMat = new THREE.MeshStandardMaterial({ color: 0x245682, roughness: 0.52, metalness: 0.4 });
+            const containerGreenMat = new THREE.MeshStandardMaterial({ color: 0x2e6b47, roughness: 0.52, metalness: 0.4 });
+            const solarPanelMat = new THREE.MeshStandardMaterial({ color: 0x13294b, roughness: 0.18, metalness: 0.82 });
+            const whitePaintMat = new THREE.MeshStandardMaterial({ color: 0xf4f1ea, roughness: 0.65 });
+            const lighthouseRedMat = new THREE.MeshStandardMaterial({ color: 0xc83228, roughness: 0.55 });
+            const thatchMat = new THREE.MeshStandardMaterial({ color: 0xc29856, roughness: 0.94 });
+            const railSteelMat = new THREE.MeshStandardMaterial({ color: 0x6c7075, roughness: 0.4, metalness: 0.78 });
+            const beaconLightMat = new THREE.MeshBasicMaterial({ color: 0xfff5b8, transparent: true, opacity: 0.42, side: THREE.DoubleSide, depthWrite: false });
+
+            const carWhiteMat = new THREE.MeshStandardMaterial({ color: 0xf7f4ee, roughness: 0.26, metalness: 0.12 });
+            const carBlackMat = new THREE.MeshStandardMaterial({ color: 0x1d1e20, roughness: 0.65, metalness: 0.2 });
+            const carGlassMat = new THREE.MeshStandardMaterial({ color: 0x20262d, roughness: 0.14, metalness: 0.78 });
+            const headLightMat = new THREE.MeshStandardMaterial({ color: 0xfff8dc, emissive: 0xffe49e, emissiveIntensity: 0.9 });
+            const tailLightMat = new THREE.MeshStandardMaterial({ color: 0xef4444, emissive: 0xdc2626, emissiveIntensity: 0.45 });
+            const boostFlameMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.88 });
+
+            // Daftar Collider Statis & Objek Beranimasi Lingkungan
+            const cylinderColliders = [];
+            const boxColliders = [];
+            const ramps = [];
+            const animatedWindmills = [];
+            const floatingBoats = [];
+            let lighthouseBeaconGroup = null;
+
+            function addCylinderCollider(x, z, r, height = 10) {
+                cylinderColliders.push({ x, z, r, height });
+            }
+
+            function addBoxCollider(x, z, width, length, rotY = 0, height = 10) {
+                boxColliders.push({
+                    x,
+                    z,
+                    halfW: width * 0.5,
+                    halfL: length * 0.5,
+                    cos: Math.cos(rotY),
+                    sin: Math.sin(rotY),
+                    height
+                });
+            }
+
+            // Pseudo-random deterministik agar scatter selalu konsisten dan padat
+            let worldSeed = 1337;
+            function seededRandom() {
+                worldSeed = (worldSeed * 16807) % 2147483647;
+                return (worldSeed - 1) / 2147483646;
+            }
+
+            // =========================================================================
+            // 3. TOPOGRAFI MEDAN: GUNDUKAN TEBING SEDANG (00:04-00:06) & PANTAI (00:07-00:41)
+            // =========================================================================
+            const WATER_LEVEL = 0.0;
+            const OASIS_WATER_LEVEL = 1.05;
+            const SEA_BOUNDARY_DEPTH = -0.92; // Batas tembok transparan di laut dangkal
+
+            function getCoastlineSignedDistance(x, z) {
+                // Garis pantai diagonal Utara-Timur persis seperti video detik 00:07 - 00:41
+                const neCoastPlane = (x * 0.44 - z * 0.898) - 56.0 + Math.sin(x * 0.045 + z * 0.035) * 4.8;
+
+                // Garis pantai melingkar 360 derajat untuk sisi Barat, Selatan, dan Tenggara pulau
+                const angle = Math.atan2(z, x);
+                const islandRadius =
+                    136.0 +
+                    Math.sin(angle * 2.0 + 0.4) * 14.0 +
+                    Math.cos(angle * 3.0 - 0.7) * 10.0 -
+                    Math.exp(-Math.pow(angle - Math.PI * 0.48, 2) / 0.2) * 20.0;
+                const radialCoast = Math.hypot(x, z) - islandRadius;
+
+                const k = 16.0;
+                const h = THREE.MathUtils.clamp(0.5 + 0.5 * (neCoastPlane - radialCoast) / k, 0.0, 1.0);
+                return THREE.MathUtils.lerp(radialCoast, neCoastPlane, h) + k * h * (1.0 - h) * 0.35;
+            }
+
+            // Menghitung ketinggian medan pasir, tebing gundukan sedang, kanyon, oasis, dan dasar laut
+            function getBaseTerrainHeight(x, z) {
+                const distFromSpawn = Math.hypot(x, z);
+                const centerFlatten = THREE.MathUtils.smoothstep(distFromSpawn, 13.0, 34.0);
+
+                // 1) Medan Gundukan / Tebing Sedang (Medium Dune Escarpment di detik 00:04 - 00:06)
+                const ridgeCoord = z + 29.5 - x * 0.38 + Math.sin(x * 0.075) * 3.0;
+                const mediumDuneRidge =
+                    Math.exp(-(ridgeCoord * ridgeCoord) / 88.0) * 3.85 -
+                    Math.exp(-Math.pow(ridgeCoord + 5.8, 2) / 46.0) * 1.15;
+
+                // 2) Gundukan bukit pasir di sisi Barat & Barat Laut
+                const westRidgeCoord = x + 38.0 + z * 0.25 + Math.cos(z * 0.06) * 4.0;
+                const westDune = Math.exp(-(westRidgeCoord * westRidgeCoord) / 140.0) * 2.9 * centerFlatten;
+
+                // 3) Lembah Kanyon & Tebing Sedang di Tenggara (x: 42, z: 36)
+                const dxCanyon = x - 44.0;
+                const dzCanyon = z - 36.0;
+                const canyonMask = Math.exp(-(dxCanyon * dxCanyon + dzCanyon * dzCanyon) / 720.0);
+                const canyonRidges = canyonMask * Math.pow(Math.sin((x - z * 0.7) * 0.095), 2) * 4.6;
+
+                // 4) Bukit di Barat Daya & Selatan
+                const southHill = Math.exp(-((x - 10) * (x - 10) + (z - 48) * (z - 48)) / 420.0) * 2.8;
+
+                // 5) Gelombang bukit pasir natural (Dunes) di seluruh pulau
+                const dunes =
+                    (Math.sin(x * 0.042 + z * 0.032) * 1.45 +
+                     Math.cos(x * 0.028 - z * 0.044) * 1.25 +
+                     (1.0 - Math.abs(Math.sin(x * 0.034 - z * 0.036))) * 1.15) * centerFlatten;
+
+                // 6) Gundukan halus di kanan bawah (dekat barrier & ban)
+                const seMound = Math.exp(-((x - 16) * (x - 16) + (z - 14) * (z - 14)) / 180.0) * 1.15;
+
+                // 7) Cekungan Danau Oasis di Barat-Selatan (-48, 28) yang rapi dan meratakan bukit di sekitarnya
+                const dxOasis = x - (-48);
+                const dzOasis = z - 28;
+                const distOasisSq = dxOasis * dxOasis + dzOasis * dzOasis;
+                const oasisFlatten = THREE.MathUtils.smoothstep(Math.sqrt(distOasisSq), 13.0, 26.0);
+                const oasisBasin = -Math.exp(-distOasisSq / 155.0) * 2.15;
+
+                const coastDist = getCoastlineSignedDistance(x, z);
+                const inlandMask = 1.0 - THREE.MathUtils.smoothstep(coastDist, -30.0, -7.0);
+
+                let baseElevation = 2.15;
+                if (coastDist > -34.0) {
+                    if (coastDist <= 0.0) {
+                        const tBeach = (coastDist + 34.0) / 34.0;
+                        const smoothBeach = tBeach * tBeach * (3.0 - 2.0 * tBeach);
+                        baseElevation = 2.15 * (1.0 - smoothBeach);
+                    } else {
+                        const tSea = Math.min(1.0, coastDist / 42.0);
+                        baseElevation = -tSea * 4.6;
+                    }
+                }
+
+                return baseElevation + (mediumDuneRidge + westDune + canyonRidges + southHill + dunes + seMound) * inlandMask * oasisFlatten + oasisBasin;
+            }
+
+            // Jaringan Jalan Tanah Multi-Cabang (Trail Utara Pantai + Ring Road Mengelilingi Pulau + Cabang Barat-Timur)
+            function getDirtRoadFactor(x, z) {
+                let factor = 0.0;
+
+                // 1) Jalan Tanah Utama ke Pantai Utara-Timur (persis video 00:00 - 00:06)
+                if (z <= 14 && z >= -46) {
+                    const roadCenterX = -2.5 + Math.sin((z - 2.0) * 0.085) * 7.5 - z * 0.22;
+                    const d1 = Math.abs(x - roadCenterX);
+                    if (d1 < 6.2) {
+                        const core = Math.exp(-(d1 * d1) / 11.0);
+                        const ruts = Math.max(
+                            Math.exp(-Math.pow(d1 - 1.25, 2) / 0.45),
+                            Math.exp(-Math.pow(d1 + 1.25, 2) / 0.45)
+                        );
+                        factor = Math.max(factor, core * 0.85 + ruts * 0.35);
+                    }
+                }
+
+                // 2) Jalan Lingkar Pulau (Island Ring Road menghubungkan semua 7 Zona)
+                const ang = Math.atan2(z - 8.0, x + 4.0);
+                const targetRad = 52.0 + Math.sin(ang * 2.0) * 8.0 + Math.cos(ang * 3.0) * 5.0;
+                const curRad = Math.hypot(x + 4.0, z - 8.0);
+                const dRing = Math.abs(curRad - targetRad);
+                if (dRing < 6.5 && getCoastlineSignedDistance(x, z) < -10.0) {
+                    const core = Math.exp(-(dRing * dRing) / 12.5);
+                    const ruts = Math.max(
+                        Math.exp(-Math.pow(dRing - 1.25, 2) / 0.45),
+                        Math.exp(-Math.pow(dRing + 1.25, 2) / 0.45)
+                    );
+                    factor = Math.max(factor, core * 0.85 + ruts * 0.35);
+                }
+
+                // 3) Jalan Lintas Barat-Timur (Desa Barat -> Spawn Gubuk -> Pom Bensin Route 66)
+                if (x >= -72 && x <= 72) {
+                    const ewCenterZ = 4.0 + Math.sin(x * 0.055) * 6.5;
+                    const dEW = Math.abs(z - ewCenterZ);
+                    if (dEW < 6.2 && getCoastlineSignedDistance(x, z) < -12.0) {
+                        const core = Math.exp(-(dEW * dEW) / 11.5);
+                        const ruts = Math.max(
+                            Math.exp(-Math.pow(dEW - 1.25, 2) / 0.45),
+                            Math.exp(-Math.pow(dEW + 1.25, 2) / 0.45)
+                        );
+                        factor = Math.max(factor, core * 0.85 + ruts * 0.35);
+                    }
+                }
+
+                return Math.min(1.0, factor);
+            }
+
+            // Informasi permukaan termasuk papan Jump Ramp dan Dermaga Kayu
+            function getSurfaceInfo(x, z) {
+                let h = getBaseTerrainHeight(x, z);
+                let isRamp = false;
+                let isPier = false;
+                let activeRamp = null;
+
+                for (let i = 0; i < ramps.length; i++) {
+                    const r = ramps[i];
+                    const dx = x - r.x;
+                    const dz = z - r.z;
+                    const localX = dx * r.cos - dz * r.sin;
+                    const localZ = dx * r.sin + dz * r.cos;
+
+                    if (Math.abs(localX) <= r.halfW && Math.abs(localZ) <= r.halfL) {
+                        const progress = THREE.MathUtils.clamp((r.halfL - localZ) / (r.halfL * 2.0), 0.0, 1.0);
+                        const rampTop = r.baseY + progress * r.height;
+                        if (rampTop >= h - 0.15) {
+                            h = rampTop;
+                            isRamp = !r.isPier && r.height > 0.2;
+                            isPier = !!r.isPier;
+                            activeRamp = r;
+                        }
+                    }
+                }
+                return { height: h, isRamp, isPier, ramp: activeRamp };
+            }
+
+            function getTerrainHeight(x, z) {
+                return getSurfaceInfo(x, z).height;
+            }
+
+            function getTerrainNormal(x, z) {
+                const eps = 0.45;
+                const hL = getTerrainHeight(x - eps, z);
+                const hR = getTerrainHeight(x + eps, z);
+                const hD = getTerrainHeight(x, z - eps);
+                const hU = getTerrainHeight(x, z + eps);
+                return new THREE.Vector3(hL - hR, 2.0 * eps, hD - hU).normalize();
+            }
+
+            // =========================================================================
+            // 4. TERRAIN MULTI-WARNA PASIR, GRADASI LAUT, OMBAK BUSA & KILATAN CAHAYA AIR
+            // =========================================================================
+            function createSandDetailTexture() {
+                const c = document.createElement('canvas');
+                c.width = 512;
+                c.height = 512;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 512);
+
+                // Butiran halus pasir agar vertex color gurun oranye-coklat & jalan tiramisu tampil akurat
+                for (let i = 0; i < 32000; i++) {
+                    const x = Math.random() * 512;
+                    const y = Math.random() * 512;
+                    const alpha = Math.random() * 0.065;
+                    ctx.fillStyle = Math.random() > 0.48 ? `rgba(255,250,242,${alpha})` : `rgba(140,85,40,${alpha})`;
+                    ctx.fillRect(x, y, 2, 2);
+                }
+
+                // Riak pasir halus ditiup angin pantai
+                ctx.strokeStyle = 'rgba(165, 110, 62, 0.065)';
+                ctx.lineWidth = 2;
+                for (let y = 0; y < 512; y += 8) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.bezierCurveTo(170, y + 3, 340, y - 3, 512, y);
+                    ctx.stroke();
+                }
+
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                tex.repeat.set(64, 64);
+                return tex;
+            }
+
+            const terrainSize = 580;
+            const terrainSegments = 300;
+            const terrainGeo = new THREE.PlaneGeometry(terrainSize, terrainSize, terrainSegments, terrainSegments);
+            terrainGeo.rotateX(-Math.PI / 2);
+
+            const posAttr = terrainGeo.attributes.position;
+            for (let i = 0; i < posAttr.count; i++) {
+                const vx = posAttr.getX(i);
+                const vz = posAttr.getZ(i);
+                posAttr.setY(i, getBaseTerrainHeight(vx, vz));
+            }
+            terrainGeo.computeVertexNormals();
+
+            // Perbedaan Warna Pasir Detail:
+            // - Ground Gurun Utama: Coklat-Oranye Gurun (Warm Terracotta / Desert Ochre)
+            // - Pathway / Street Road & Pantai: Krem Pasir Pantai / Tiramisu (Creamy Tiramisu Sand)
+            const normAttr = terrainGeo.attributes.normal;
+            const terrainColors = [];
+            const sunlitDesertSand = new THREE.Color(0xe69b56); // Oranye-emas gurun terkena matahari
+            const baseDesertSand = new THREE.Color(0xd18242);   // Coklat-oranye pasir gurun utama
+            const shadedDuneOchre = new THREE.Color(0xa65a26);  // Coklat terracotta gelap di sisi bayangan bukit pasir
+            const tiramisuRoadSand = new THREE.Color(0xf2d6a7); // Warna Tiramisu / Krem Pasir Pantai untuk Pathway & Street Road
+            const goldenBeachSand = new THREE.Color(0xf4dab0);  // Hamparan pasir pantai warna Tiramisu cerah
+            const wetShoreSwash = new THREE.Color(0xb8864c);    // Pasir basah di bibir pantai tempat ombak menyapu
+            const turquoiseSeabed = new THREE.Color(0x52c4b0);  // Dasar laut dangkal hijau mint-turquoise
+            const oasisGrassCol = new THREE.Color(0x6b8c42);    // Tepian hijau segar sekitar Oasis
+
+            const sunDirNorm = sunOffset.clone().normalize();
+
+            for (let i = 0; i < posAttr.count; i++) {
+                const vx = posAttr.getX(i);
+                const vy = posAttr.getY(i);
+                const vz = posAttr.getZ(i);
+
+                const nx = normAttr.getX(i);
+                const ny = normAttr.getY(i);
+                const nz = normAttr.getZ(i);
+
+                // Seberapa menghadap matahari lereng gundukan tersebut
+                const sunDot = nx * sunDirNorm.x + ny * sunDirNorm.y + nz * sunDirNorm.z;
+                const c = baseDesertSand.clone();
+
+                // Kontras warna lereng bukit pasir Coklat-Oranye (Sunlit Terracotta vs Shaded Brown Ochre)
+                if (sunDot < 0.44) {
+                    const shadeT = THREE.MathUtils.clamp((0.44 - sunDot) * 2.2, 0.0, 0.88);
+                    c.lerp(shadedDuneOchre, shadeT);
+                } else if (sunDot > 0.56) {
+                    const litT = THREE.MathUtils.clamp((sunDot - 0.56) * 1.9, 0.0, 0.72);
+                    c.lerp(sunlitDesertSand, litT);
+                }
+
+                // Pathway / Street Road berwarna Krem Tiramisu yang kontras di atas gurun coklat-oranye
+                const roadFactor = getDirtRoadFactor(vx, vz);
+                if (roadFactor > 0.02 && vy > 0.4) {
+                    c.lerp(tiramisuRoadSand, Math.min(0.92, roadFactor * 0.95));
+                }
+
+                // Tepi Pantai & Rumput Danau Oasis yang rapi
+                const distOasis = Math.hypot(vx - (-48), vz - 28);
+                if (distOasis < 18.0) {
+                    const oasisSandT = THREE.MathUtils.clamp(1.0 - distOasis / 18.0, 0.0, 1.0);
+                    c.lerp(tiramisuRoadSand, oasisSandT * 0.75);
+                    if (distOasis > 8.5 && distOasis < 15.5) {
+                        c.lerp(oasisGrassCol, 0.48);
+                    }
+                }
+
+                // Gradasi menuju Pantai warna Tiramisu / Pasir Pantai -> Bibir Pantai Basah -> Laut Mint-Turquoise
+                const coastDist = getCoastlineSignedDistance(vx, vz);
+                if (coastDist > -36.0 && distOasis >= 18.0) {
+                    const beachT = THREE.MathUtils.smoothstep(coastDist, -36.0, -6.0);
+                    c.lerp(goldenBeachSand, beachT * 0.94);
+                }
+                if (coastDist > -4.8 && coastDist < 2.5) {
+                    const swashT = 1.0 - Math.abs(coastDist + 1.1) / 3.8;
+                    if (swashT > 0) {
+                        c.lerp(wetShoreSwash, swashT * 0.72);
+                    }
+                }
+                if (coastDist >= 0.0) {
+                    const seabedT = THREE.MathUtils.clamp(coastDist / 14.0, 0.0, 1.0);
+                    c.lerp(turquoiseSeabed, seabedT * 0.85);
+                }
+
+                terrainColors.push(c.r, c.g, c.b);
+            }
+            terrainGeo.setAttribute('color', new THREE.Float32BufferAttribute(terrainColors, 3));
+
+            const terrainMat = new THREE.MeshStandardMaterial({
+                map: createSandDetailTexture(),
+                vertexColors: true,
+                roughness: 0.91,
+                metalness: 0.03
+            });
+
+            const terrainMesh = new THREE.Mesh(terrainGeo, terrainMat);
+            terrainMesh.receiveShadow = true;
+            scene.add(terrainMesh);
+
+            // --- LAUTAN BERGRADASI (MINT-TURQUOISE -> AQUAMARINE -> SAPPHIRE BLUE) ---
+            function createOceanWaveTexture() {
+                const c = document.createElement('canvas');
+                c.width = 512;
+                c.height = 512;
+                const ctx = c.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 512);
+
+                // Garis-garis riak gelombang halus diagonal seperti di video 00:08 - 00:41
+                ctx.strokeStyle = 'rgba(180, 235, 245, 0.32)';
+                ctx.lineWidth = 3;
+                for (let i = -512; i < 1024; i += 18) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, 0);
+                    ctx.bezierCurveTo(i + 120, 170, i + 260, 340, i + 380, 512);
+                    ctx.stroke();
+                }
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                tex.repeat.set(36, 36);
+                return tex;
+            }
+
+            const oceanSize = 860;
+            const waterGeo = new THREE.PlaneGeometry(oceanSize, oceanSize, 200, 200);
+            waterGeo.rotateX(-Math.PI / 2);
+            const waterBasePos = waterGeo.attributes.position.array.slice();
+            const waterColors = [];
+            const waterCoastDist = new Float32Array(waterGeo.attributes.position.count);
+
+            // Warna gradasi air laut identik dengan video 00:08 - 00:41
+            const surfFoamWhite = new THREE.Color(0xf7fffc);     // Buih putih tepi pantai
+            const shallowMint = new THREE.Color(0x7ce6cf);       // Hijau mint-turquoise bening di tepi pantai
+            const midAquamarine = new THREE.Color(0x32a8a6);     // Turquoise tengah
+            const deepOceanBlue = new THREE.Color(0x16537e);     // Biru laut dalam
+            const abyssalSapphire = new THREE.Color(0x0c3454);   // Biru safir gelap
+
+            for (let i = 0; i < waterGeo.attributes.position.count; i++) {
+                const wx = waterBasePos[i * 3];
+                const wz = waterBasePos[i * 3 + 2];
+                const cDist = getCoastlineSignedDistance(wx, wz);
+                waterCoastDist[i] = cDist;
+
+                // PENTING: Sembunyikan vertex waterMesh yang berada jauh di bawah daratan pulau
+                // agar TIDAK PERNAH bocor / meleber ("leber") ke cekungan Oasis atau lembah daratan!
+                if (cDist < -3.5) {
+                    waterGeo.attributes.position.setY(i, -18.0);
+                }
+
+                const wc = new THREE.Color();
+                if (cDist < 1.8) {
+                    const t = THREE.MathUtils.clamp((cDist + 1.5) / 3.3, 0.0, 1.0);
+                    wc.copy(surfFoamWhite).lerp(shallowMint, t);
+                } else if (cDist < 13.5) {
+                    const t = (cDist - 1.8) / 11.7;
+                    wc.copy(shallowMint).lerp(midAquamarine, t);
+                } else if (cDist < 28.0) {
+                    const t = (cDist - 13.5) / 14.5;
+                    wc.copy(midAquamarine).lerp(deepOceanBlue, t);
+                } else {
+                    const t = Math.min(1.0, (cDist - 28.0) / 30.0);
+                    wc.copy(deepOceanBlue).lerp(abyssalSapphire, t);
+                }
+                waterColors.push(wc.r, wc.g, wc.b);
+            }
+            waterGeo.setAttribute('color', new THREE.Float32BufferAttribute(waterColors, 3));
+
+            const oceanWaveTex = createOceanWaveTexture();
+            const waterMat = new THREE.MeshStandardMaterial({
+                map: oceanWaveTex,
+                vertexColors: true,
+                emissive: 0x0b3648,
+                emissiveIntensity: 0.2,
+                roughness: 0.16,
+                metalness: 0.42,
+                transparent: true,
+                opacity: 0.86
+            });
+
+            const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+            waterMesh.position.y = WATER_LEVEL;
+            waterMesh.receiveShadow = true;
+            scene.add(waterMesh);
+
+            // --- OMBAK BUSA BERENDA (CELLULAR LACY SEA FOAM MESHES SEPERTI VIDEO 00:08 - 00:41) ---
+            function createLacyFoamTexture() {
+                const c = document.createElement('canvas');
+                c.width = 512;
+                c.height = 256;
+                const ctx = c.getContext('2d');
+                ctx.clearRect(0, 0, 512, 256);
+
+                // Garis bibir ombak putih pekat bergelombang organik di bagian depan
+                ctx.fillStyle = 'rgba(255, 253, 248, 0.95)';
+                ctx.beginPath();
+                ctx.moveTo(0, 42);
+                for (let x = 0; x <= 512; x += 16) {
+                    const y = 38 + Math.sin(x * 0.049) * 10 + Math.cos(x * 0.122) * 6;
+                    ctx.lineTo(x, y);
+                }
+                for (let x = 512; x >= 0; x -= 16) {
+                    const y = 68 + Math.sin(x * 0.049 + 0.8) * 14 + Math.cos(x * 0.098) * 8;
+                    ctx.lineTo(x, y);
+                }
+                ctx.closePath();
+                ctx.fill();
+
+                // Jaringan busa berenda (cellular lacy foam bubbles)
+                for (let i = 0; i < 420; i++) {
+                    const bx = Math.random() * 512;
+                    const by = 45 + Math.random() * 145;
+                    const br = 3 + Math.random() * 14;
+                    const alpha = (1.0 - (by - 40) / 170) * 0.78;
+                    if (alpha > 0.05) {
+                        ctx.strokeStyle = `rgba(255, 255, 252, ${alpha})`;
+                        ctx.lineWidth = 1.6 + Math.random() * 1.5;
+                        ctx.beginPath();
+                        ctx.ellipse(bx, by, br * 1.35, br * 0.72, (Math.random() - 0.5) * 0.5, 0, Math.PI * 2);
+                        ctx.stroke();
+                    }
+                }
+
+                // Pita busa gelombang kedua di belakang bibir ombak
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                for (let x = 0; x <= 512; x += 16) {
+                    const y = 175 + Math.sin(x * 0.061 + 1.2) * 12 + Math.cos(x * 0.11) * 6;
+                    if (x === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                }
+                ctx.stroke();
+
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.ClampToEdgeWrapping;
+                tex.repeat.set(38, 1);
+                return tex;
+            }
+
+            const lacyFoamTex = createLacyFoamTexture();
+
+            // Buat sabuk Ombak Busa 360 derajat yang mengikuti kontur garis pantai (getCoastlineSignedDistance == 0)
+            function createShorelineLacyFoamRibbon(targetCoastDist, ribbonWidth, baseOpacity) {
+                const segs = 320;
+                const geo = new THREE.PlaneGeometry(1, 1, segs, 1);
+                const pos = geo.attributes.position;
+                const uvs = geo.attributes.uv;
+
+                for (let i = 0; i <= segs; i++) {
+                    const u = i / segs;
+                    const theta = u * Math.PI * 2.0;
+                    const dirX = Math.cos(theta);
+                    const dirZ = Math.sin(theta);
+
+                    // Binary search mencari jari-jari di mana getCoastlineSignedDistance(x, z) == targetCoastDist
+                    let rLow = 45.0, rHigh = 175.0;
+                    for (let step = 0; step < 11; step++) {
+                        const rMid = (rLow + rHigh) * 0.5;
+                        if (getCoastlineSignedDistance(dirX * rMid, dirZ * rMid) < targetCoastDist) {
+                            rLow = rMid;
+                        } else {
+                            rHigh = rMid;
+                        }
+                    }
+                    const rInner = (rLow + rHigh) * 0.5;
+                    const rOuter = rInner + ribbonWidth;
+
+                    // Baris atas (y = 0.5 di PlaneGeometry) = tepi pantai dalam, Baris bawah (y = -0.5) = ke arah laut
+                    const idxTop = i;
+                    const idxBot = i + (segs + 1);
+
+                    pos.setXYZ(idxTop, dirX * rInner, WATER_LEVEL + 0.05, dirZ * rInner);
+                    pos.setXYZ(idxBot, dirX * rOuter, WATER_LEVEL + 0.04, dirZ * rOuter);
+
+                    uvs.setXY(idxTop, u * 38.0, 0.05);
+                    uvs.setXY(idxBot, u * 38.0, 0.98);
+                }
+                geo.computeVertexNormals();
+
+                const mat = new THREE.MeshBasicMaterial({
+                    map: lacyFoamTex,
+                    transparent: true,
+                    opacity: baseOpacity,
+                    depthWrite: false,
+                    side: THREE.DoubleSide
+                });
+
+                const mesh = new THREE.Mesh(geo, mat);
+                scene.add(mesh);
+                return { mesh, mat, baseOpacity, geo, basePositions: geo.attributes.position.array.slice(), segs };
+            }
+
+            const foamRibbonPrimary = createShorelineLacyFoamRibbon(-0.6, 7.2, 0.92);
+            const foamRibbonSecondary = createShorelineLacyFoamRibbon(3.2, 6.5, 0.58);
+
+            // --- KILATAN CAHAYA REFLEKSI AIR (WATER SUN SPARKLES SEPERTI VIDEO 00:08 - 00:41) ---
+            function createSparkleTexture() {
+                const c = document.createElement('canvas');
+                c.width = 64;
+                c.height = 64;
+                const ctx = c.getContext('2d');
+                const grad = ctx.createRadialGradient(32, 32, 1, 32, 32, 30);
+                grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+                grad.addColorStop(0.25, 'rgba(255, 250, 220, 0.85)');
+                grad.addColorStop(0.6, 'rgba(220, 248, 255, 0.25)');
+                grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 64, 64);
+
+                // Bentuk bintang kilau 4 sudut halus
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.fillRect(30, 6, 4, 52);
+                ctx.fillRect(6, 30, 52, 4);
+                return new THREE.CanvasTexture(c);
+            }
+
+            const sparkleCount = 2600;
+            const sparkleGeo = new THREE.BufferGeometry();
+            const sparklePositions = new Float32Array(sparkleCount * 3);
+            const sparklePhases = new Float32Array(sparkleCount);
+            const sparkleBasePositions = new Float32Array(sparkleCount * 2);
+
+            let sIdx = 0;
+            while (sIdx < sparkleCount) {
+                // Fokuskan ribuan kilatan cahaya di sepanjang laut pantai Utara-Timur & mengelilingi pulau
+                let sx, sz;
+                if (sIdx < sparkleCount * 0.65) {
+                    // Area laut pantai Utara-Timur (tempat video 00:08 - 00:41 berlangsung)
+                    sx = -55 + Math.random() * 195;
+                    sz = -175 + Math.random() * 145;
+                } else {
+                    const ang = Math.random() * Math.PI * 2;
+                    const rad = 85 + Math.random() * 140;
+                    sx = Math.cos(ang) * rad;
+                    sz = Math.sin(ang) * rad;
+                }
+                const cDist = getCoastlineSignedDistance(sx, sz);
+                if (cDist > 0.6 && cDist < 85.0) {
+                    sparklePositions[sIdx * 3] = sx;
+                    sparklePositions[sIdx * 3 + 1] = WATER_LEVEL + 0.08;
+                    sparklePositions[sIdx * 3 + 2] = sz;
+                    sparkleBasePositions[sIdx * 2] = sx;
+                    sparkleBasePositions[sIdx * 2 + 1] = sz;
+                    sparklePhases[sIdx] = Math.random() * Math.PI * 2;
+                    sIdx++;
+                }
+            }
+            sparkleGeo.setAttribute('position', new THREE.BufferAttribute(sparklePositions, 3));
+
+            const sparkleMat = new THREE.PointsMaterial({
+                map: createSparkleTexture(),
+                size: 1.55,
+                transparent: true,
+                opacity: 0.92,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+            const sparklePoints = new THREE.Points(sparkleGeo, sparkleMat);
+            scene.add(sparklePoints);
+
+            // Air Jernih di Cekungan Danau Oasis Barat Daya (-48, 28) — ukuran pas dengan cekungan tanpa meleber
+            const oasisWaterGeo = new THREE.CircleGeometry(10.8, 40);
+            oasisWaterGeo.rotateX(-Math.PI / 2);
+            const oasisWaterMat = new THREE.MeshStandardMaterial({
+                color: 0x2ec4b6,
+                emissive: 0x0e4d52,
+                emissiveIntensity: 0.28,
+                roughness: 0.14,
+                metalness: 0.45,
+                transparent: true,
+                opacity: 0.88
+            });
+            const oasisWaterMesh = new THREE.Mesh(oasisWaterGeo, oasisWaterMat);
+            oasisWaterMesh.position.set(-48.0, OASIS_WATER_LEVEL, 28.0);
+            oasisWaterMesh.receiveShadow = true;
+            scene.add(oasisWaterMesh);
+
+            // =========================================================================
+            // 5. RERUMPUTAN PANTAI & GURUN SUPER PADAT (850+ RUMPUN RUMPUT BERBAYANGAN)
+            // =========================================================================
+            function createGrassTuftGeometry() {
+                const blades = 11;
+                const geom = new THREE.BufferGeometry();
+                const vertices = [];
+                const normals = [];
+
+                for (let b = 0; b < blades; b++) {
+                    const angle = (b / blades) * Math.PI * 2 + (seededRandom() - 0.5) * 0.4;
+                    const lean = 0.35 + seededRandom() * 0.55;
+                    const h = 0.85 + seededRandom() * 0.65;
+                    const w = 0.09 + seededRandom() * 0.04;
+                    const ox = (seededRandom() - 0.5) * 0.45;
+                    const oz = (seededRandom() - 0.5) * 0.45;
+
+                    const dx = Math.cos(angle);
+                    const dz = Math.sin(angle);
+                    const px = -dz * w;
+                    const pz = dx * w;
+
+                    const tipX = ox + dx * lean;
+                    const tipY = h;
+                    const tipZ = oz + dz * lean;
+
+                    vertices.push(
+                        ox - px, 0.0, oz - pz,
+                        ox + px, 0.0, oz + pz,
+                        tipX, tipY, tipZ
+                    );
+                    normals.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+                }
+
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+                geom.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
+                geom.computeVertexNormals();
+                return geom;
+            }
+
+            const grassTuftGeo = createGrassTuftGeometry();
+            const grassCoordinates = [];
+
+            function addGrassBelt(startX, startZ, endX, endZ, count, spreadWidth) {
+                for (let i = 0; i < count; i++) {
+                    const t = i / Math.max(1, count - 1);
+                    const bx = THREE.MathUtils.lerp(startX, endX, t) + (seededRandom() - 0.5) * spreadWidth;
+                    const bz = THREE.MathUtils.lerp(startZ, endZ, t) + (seededRandom() - 0.5) * spreadWidth;
+                    const scale = 0.8 + seededRandom() * 0.78;
+                    grassCoordinates.push({ x: bx, z: bz, scale, rotY: seededRandom() * Math.PI * 2 });
+                }
+            }
+
+            // 1) Rumpun rumput tepat di sebelah kanan/depan gubuk kayu (persis seperti video 00:01 - 00:03!)
+            addGrassBelt(-3.8, -0.5, 1.2, -3.2, 46, 3.4);
+
+            // 2) Sabuk-sabuk Rerumputan Pantai di sepanjang Pantai Utara-Timur (00:07 - 00:41)
+            addGrassBelt(-26.0, -52.0, -6.0, -43.0, 90, 3.8);
+            addGrassBelt(-2.0, -41.0, 18.0, -31.0, 100, 4.2);
+            addGrassBelt(14.0, -26.0, 36.0, -14.0, 92, 4.0);
+            addGrassBelt(-12.0, -35.0, 6.0, -27.0, 68, 3.6);
+            addGrassBelt(28.0, -12.0, 48.0, 2.0, 80, 4.2);
+            addGrassBelt(-42.0, -58.0, -22.0, -49.0, 72, 3.8);
+
+            // 3) Sabuk Rerumputan di Oasis, Desa Barat, Kanyon, Pom Bensin, dan Pesisir 360°
+            addGrassBelt(-56.0, 18.0, -38.0, 38.0, 95, 7.5);
+            addGrassBelt(-28.0, 68.0, 22.0, 74.0, 85, 5.2);
+            addGrassBelt(38.0, 52.0, 74.0, 28.0, 75, 5.5);
+            addGrassBelt(-82.0, -18.0, -68.0, 32.0, 80, 6.0);
+            addGrassBelt(-52.0, -24.0, -32.0, -12.0, 55, 5.5);
+            addGrassBelt(24.0, -12.0, 48.0, 12.0, 55, 6.0);
+
+            // 4) Scatter Otomatis Rumpun Rumput di seluruh bukit pasir pulau agar tidak ada tanah gundul
+            for (let i = 0; i < 240; i++) {
+                const rx = (seededRandom() - 0.5) * 210;
+                const rz = (seededRandom() - 0.5) * 210;
+                const cDist = getCoastlineSignedDistance(rx, rz);
+                if (cDist < -4.0 && Math.hypot(rx, rz) > 9.0) {
+                    grassCoordinates.push({
+                        x: rx,
+                        z: rz,
+                        scale: 0.75 + seededRandom() * 0.85,
+                        rotY: seededRandom() * Math.PI * 2
+                    });
+                }
+            }
+
+            const grassInstancedMesh = new THREE.InstancedMesh(grassTuftGeo, duneGrassMat, grassCoordinates.length);
+            grassInstancedMesh.castShadow = true;
+            grassInstancedMesh.receiveShadow = true;
+
+            const dummyMatrix = new THREE.Matrix4();
+            const dummyPos = new THREE.Vector3();
+            const dummyQuat = new THREE.Quaternion();
+            const dummyScale = new THREE.Vector3();
+            const dummyEuler = new THREE.Euler();
+
+            for (let i = 0; i < grassCoordinates.length; i++) {
+                const g = grassCoordinates[i];
+                const gy = getBaseTerrainHeight(g.x, g.z) - 0.05;
+                dummyPos.set(g.x, gy, g.z);
+                dummyEuler.set(0, g.rotY, 0);
+                dummyQuat.setFromEuler(dummyEuler);
+                dummyScale.set(g.scale, g.scale, g.scale);
+                dummyMatrix.compose(dummyPos, dummyQuat, dummyScale);
+                grassInstancedMesh.setMatrixAt(i, dummyMatrix);
+            }
+            grassInstancedMesh.instanceMatrix.needsUpdate = true;
+            scene.add(grassInstancedMesh);
+
+            // =========================================================================
+            // 6. KAWANAN 68+ BURUNG CAMAR INTERAKTIF DI SELURUH PESISIR PANTAI
+            // =========================================================================
+            const gullWhiteMat = new THREE.MeshStandardMaterial({ color: 0xfdfcfa, roughness: 0.5 });
+            const gullBlackTipMat = new THREE.MeshStandardMaterial({ color: 0x1e2022, roughness: 0.6 });
+            const gullBeakMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.5 });
+
+            const seagulls = [];
+
+            function createSeagull(x, z, startFlying = false) {
+                const root = new THREE.Group();
+                const groundY = Math.max(WATER_LEVEL + 0.05, getBaseTerrainHeight(x, z));
+
+                const body = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.18, 0.58), gullWhiteMat);
+                body.castShadow = true;
+                root.add(body);
+
+                const head = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.18, 0.22), gullWhiteMat);
+                head.position.set(0, 0.1, -0.32);
+                head.castShadow = true;
+                root.add(head);
+
+                const beak = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 5), gullBeakMat);
+                beak.rotation.x = -Math.PI / 2;
+                beak.position.set(0, 0.08, -0.48);
+                root.add(beak);
+
+                const leftWingPivot = new THREE.Group();
+                leftWingPivot.position.set(-0.1, 0.06, -0.02);
+                const leftWingIn = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.04, 0.24), gullWhiteMat);
+                leftWingIn.position.set(-0.28, 0, 0);
+                leftWingIn.castShadow = true;
+                leftWingPivot.add(leftWingIn);
+                const leftWingTip = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.035, 0.18), gullBlackTipMat);
+                leftWingTip.position.set(-0.68, 0, 0.03);
+                leftWingTip.rotation.y = 0.25;
+                leftWingTip.castShadow = true;
+                leftWingPivot.add(leftWingTip);
+                root.add(leftWingPivot);
+
+                const rightWingPivot = new THREE.Group();
+                rightWingPivot.position.set(0.1, 0.06, -0.02);
+                const rightWingIn = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.04, 0.24), gullWhiteMat);
+                rightWingIn.position.set(0.28, 0, 0);
+                rightWingIn.castShadow = true;
+                rightWingPivot.add(rightWingIn);
+                const rightWingTip = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.035, 0.18), gullBlackTipMat);
+                rightWingTip.position.set(0.68, 0, 0.03);
+                rightWingTip.rotation.y = -0.25;
+                rightWingTip.castShadow = true;
+                rightWingPivot.add(rightWingTip);
+                root.add(rightWingPivot);
+
+                const initY = startFlying ? groundY + 3.5 + seededRandom() * 5.5 : groundY + 0.14;
+                root.position.set(x, initY, z);
+                const heading = seededRandom() * Math.PI * 2;
+                root.rotation.y = heading;
+                scene.add(root);
+
+                seagulls.push({
+                    root,
+                    leftWingPivot,
+                    rightWingPivot,
+                    homeX: x,
+                    homeZ: z,
+                    x,
+                    y: initY,
+                    z,
+                    vx: startFlying ? -Math.sin(heading) * 6.5 : 0,
+                    vy: 0,
+                    vz: startFlying ? -Math.cos(heading) * 6.5 : 0,
+                    heading,
+                    state: startFlying ? 'soaring' : 'resting',
+                    flapPhase: seededRandom() * Math.PI * 2,
+                    timer: seededRandom() * 8.0
+                });
+            }
+
+            // Kawanan burung camar di Pantai Utara-Timur (00:13 - 00:41)
+            for (let i = 0; i < 44; i++) {
+                const along = -40.0 + (i / 43) * 96.0 + (seededRandom() - 0.5) * 5.0;
+                const bx = along;
+                const bz = (along * 0.44 - 56.0) / 0.898 + (seededRandom() - 0.5) * 10.0;
+                createSeagull(bx, bz, i % 4 === 0);
+            }
+            // Kawanan burung camar tambahan mengelilingi Pantai Selatan, Barat & Dermaga
+            for (let i = 0; i < 26; i++) {
+                const ang = (i / 26) * Math.PI * 1.4 + 0.3;
+                const rad = 82.0 + seededRandom() * 24.0;
+                createSeagull(Math.cos(ang) * rad, Math.sin(ang) * rad, i % 3 === 0);
+            }
+
+            // =========================================================================
+            // 7. PEMBANGUNAN 7 ZONA BESAR + SCATTER SUPER PADAT DI SELURUH PULAU
+            // =========================================================================
+
+            // --- ZONA 1: TENGAH (AREA SPAWN VIDEO: GUBUK, PAGAR, TRUSS, MESA, TIANG KABEL) ---
+            function createDesertShack(x, z, rotY) {
+                const group = new THREE.Group();
+                const y = getBaseTerrainHeight(x, z);
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const body = new THREE.Mesh(new THREE.BoxGeometry(5.6, 3.5, 4.8), woodLightMat);
+                body.position.set(0, 1.75, 0);
+                body.castShadow = true;
+                body.receiveShadow = true;
+                group.add(body);
+
+                for (let i = -2.2; i <= 2.2; i += 0.55) {
+                    const rib = new THREE.Mesh(new THREE.BoxGeometry(5.68, 0.08, 4.88), woodDarkMat);
+                    rib.position.set(0, 1.75 + i * 0.6, 0);
+                    group.add(rib);
+                }
+
+                const roofMain = new THREE.Mesh(new THREE.BoxGeometry(6.4, 0.26, 5.6), roofMat);
+                roofMain.position.set(0, 3.65, 0);
+                roofMain.rotation.z = -0.11;
+                roofMain.castShadow = true;
+                roofMain.receiveShadow = true;
+                group.add(roofMain);
+
+                const porchRoof = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.18, 2.5), roofMat);
+                porchRoof.position.set(0, 2.65, 3.35);
+                porchRoof.rotation.x = 0.22;
+                porchRoof.castShadow = true;
+                porchRoof.receiveShadow = true;
+                group.add(porchRoof);
+
+                for (let px of [-2.5, 0, 2.5]) {
+                    const post = new THREE.Mesh(new THREE.BoxGeometry(0.22, 2.6, 0.22), woodDarkMat);
+                    post.position.set(px, 1.3, 4.25);
+                    post.castShadow = true;
+                    group.add(post);
+                }
+
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(5.8, 0.24, 2.4), woodDarkMat);
+                deck.position.set(0, 0.12, 3.3);
+                deck.receiveShadow = true;
+                group.add(deck);
+
+                const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 2.2, 0.1), darkWindowMat);
+                door.position.set(-0.8, 1.2, 2.41);
+                group.add(door);
+
+                const win1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.0, 0.1), darkWindowMat);
+                win1.position.set(1.2, 1.85, 2.41);
+                group.add(win1);
+
+                scene.add(group);
+                addBoxCollider(x, z, 6.0, 6.4, rotY, 4.5);
+            }
+            createDesertShack(-10.5, 2.2, 0.35);
+
+            function createWireFenceChain(points) {
+                for (let i = 0; i < points.length; i++) {
+                    const [px, pz] = points[i];
+                    const py = getBaseTerrainHeight(px, pz);
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.13, 1.9, 6), woodDarkMat);
+                    post.position.set(px, py + 0.95, pz);
+                    post.castShadow = true;
+                    post.receiveShadow = true;
+                    scene.add(post);
+
+                    if (i < points.length - 1) {
+                        const [nx, nz] = points[i + 1];
+                        const ny = getBaseTerrainHeight(nx, nz);
+                        const dx = nx - px;
+                        const dz = nz - pz;
+                        const len = Math.hypot(dx, dz);
+                        const midX = (px + nx) * 0.5;
+                        const midZ = (pz + nz) * 0.5;
+                        const midY = (py + ny) * 0.5;
+                        const angle = Math.atan2(dx, dz);
+
+                        for (let h of [0.55, 1.05, 1.55]) {
+                            const wire = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, len), woodDarkMat);
+                            wire.position.set(midX, midY + h, midZ);
+                            wire.rotation.y = angle;
+                            wire.castShadow = true;
+                            scene.add(wire);
+                        }
+                    }
+                }
+            }
+
+            createWireFenceChain([
+                [-18.5, -2.0], [-14.2, -5.8], [-9.0, -7.2],
+                [-4.2, -4.5], [-3.2, 1.5], [-5.5, 7.2],
+                [-10.8, 9.8], [-16.2, 7.5], [-18.5, 2.5], [-18.5, -2.0]
+            ]);
+
+            function createSteelTrussGantry(x, z, rotY) {
+                const group = new THREE.Group();
+                const y = getBaseTerrainHeight(x, z);
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const span = 16.8;
+                const height = 10.6;
+                const depth = 1.35;
+                const barRadius = 0.085;
+
+                function addBar(p1, p2, r = barRadius) {
+                    const v1 = new THREE.Vector3(...p1);
+                    const v2 = new THREE.Vector3(...p2);
+                    const dist = v1.distanceTo(v2);
+                    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(r, r, dist, 6), metalTrussMat);
+                    cyl.position.copy(v1).add(v2).multiplyScalar(0.5);
+                    cyl.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), v2.clone().sub(v1).normalize());
+                    cyl.castShadow = true;
+                    cyl.receiveShadow = true;
+                    group.add(cyl);
+                }
+
+                for (let side of [-1, 1]) {
+                    const baseX = side * (span * 0.5);
+                    const w = 1.25;
+                    const corners = [
+                        [baseX - w * 0.5, -depth * 0.5],
+                        [baseX + w * 0.5, -depth * 0.5],
+                        [baseX + w * 0.5, depth * 0.5],
+                        [baseX - w * 0.5, depth * 0.5]
+                    ];
+                    corners.forEach(([cx, cz]) => {
+                        addBar([cx, 0, cz], [cx, height, cz], barRadius * 1.2);
+                    });
+
+                    const steps = 6;
+                    const stepH = height / steps;
+                    for (let s = 0; s < steps; s++) {
+                        const y0 = s * stepH;
+                        const y1 = (s + 1) * stepH;
+                        for (let c = 0; c < 4; c++) {
+                            const [x0, z0] = corners[c];
+                            const [x1, z1] = corners[(c + 1) % 4];
+                            addBar([x0, y1, z0], [x1, y1, z1], barRadius * 0.85);
+                            addBar([x0, y0, z0], [x1, y1, z1], barRadius * 0.75);
+                        }
+                    }
+
+                    addBoxCollider(
+                        x + Math.cos(rotY) * baseX,
+                        z - Math.sin(rotY) * baseX,
+                        1.55,
+                        1.55,
+                        rotY,
+                        height
+                    );
+                }
+
+                const beamH = 1.45;
+                const yBot = height - beamH;
+                const yTop = height;
+                const xLeft = -span * 0.5 - 0.6;
+                const xRight = span * 0.5 + 0.6;
+
+                const topCorners = [
+                    [yBot, -depth * 0.5],
+                    [yTop, -depth * 0.5],
+                    [yTop, depth * 0.5],
+                    [yBot, depth * 0.5]
+                ];
+                topCorners.forEach(([cy, cz]) => {
+                    addBar([xLeft, cy, cz], [xRight, cy, cz], barRadius * 1.2);
+                });
+
+                const hSteps = 12;
+                const stepX = (xRight - xLeft) / hSteps;
+                for (let i = 0; i < hSteps; i++) {
+                    const bx0 = xLeft + i * stepX;
+                    const bx1 = xLeft + (i + 1) * stepX;
+                    for (let c = 0; c < 4; c++) {
+                        const [y0, z0] = topCorners[c];
+                        const [y1, z1] = topCorners[(c + 1) % 4];
+                        addBar([bx0, y0, z0], [bx0, y1, z1], barRadius * 0.8);
+                        addBar([bx0, y0, z0], [bx1, y1, z1], barRadius * 0.75);
+                    }
+                }
+                scene.add(group);
+            }
+            createSteelTrussGantry(-4.2, 13.5, 0.34);
+            // Gerbang Truss kedua di pintu masuk sirkuit Selatan
+            createSteelTrussGantry(8.0, 56.0, -0.18);
+
+            // --- PILAR BATU MESA, SINGKAPAN TEBING & BEBATUAN ---
+            function createMesaPillar(x, z, radius, height) {
+                const y = getBaseTerrainHeight(x, z);
+                const geo = new THREE.CylinderGeometry(radius * 0.92, radius * 1.08, height, 9, 4);
+                const pos = geo.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const vx = pos.getX(i);
+                    const vy = pos.getY(i);
+                    const vz = pos.getZ(i);
+                    const n = Math.sin(vy * 1.4 + vx * 0.8) * 0.18 + Math.cos(vz * 1.2) * 0.15;
+                    pos.setX(i, vx + n);
+                    pos.setZ(i, vz + n);
+                }
+                geo.computeVertexNormals();
+                const mesh = new THREE.Mesh(geo, pillarRockMat);
+                mesh.position.set(x, y + height * 0.5 - 0.3, z);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                addCylinderCollider(x, z, radius * 0.95, height);
+            }
+
+            // Pilar batu mesa di seluruh pulau
+            const mesaList = [
+                [0.6, -12.5, 2.35, 11.2],
+                [-22.0, -18.5, 2.1, 9.2],
+                [34.0, 26.0, 3.6, 13.5],
+                [56.0, 34.0, 4.2, 15.0],
+                [46.0, 52.0, 3.4, 12.0],
+                [-64.0, -28.0, 3.2, 11.5],
+                [-32.0, 54.0, 2.9, 10.5],
+                [22.0, -14.0, 2.5, 9.8]
+            ];
+            mesaList.forEach(m => createMesaPillar(...m));
+
+            function createSlantedCliffOutcrop(x, z, scaleX, scaleY, scaleZ, rotY, tiltZ = 0.22) {
+                const y = getBaseTerrainHeight(x, z);
+                const geo = new THREE.CylinderGeometry(1.0, 1.35, 1.8, 7, 1);
+                geo.computeVertexNormals();
+                const mesh = new THREE.Mesh(geo, pillarRockMat);
+                mesh.position.set(x, y + scaleY * 0.55, z);
+                mesh.scale.set(scaleX, scaleY, scaleZ);
+                mesh.rotation.set(0.08, rotY, tiltZ);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                addCylinderCollider(x, z, Math.max(scaleX, scaleZ) * 0.9, scaleY * 1.6);
+            }
+
+            const cliffOutcrops = [
+                [3.5, -27.5, 1.9, 2.4, 1.5, 0.4, 0.28],
+                [11.2, -25.0, 2.2, 1.5, 1.4, -0.3, 0.15],
+                [14.8, -15.5, 2.1, 1.6, 1.7, 0.5, -0.18],
+                [-11.5, -24.0, 2.3, 1.8, 1.7, 0.2, 0.2],
+                [-28.0, -32.0, 2.6, 2.2, 1.9, 0.8, -0.24],
+                [28.0, 18.0, 2.5, 2.1, 1.8, -0.5, 0.22],
+                [52.0, 22.0, 2.9, 2.5, 2.1, 0.3, -0.25],
+                [-44.0, 48.0, 2.4, 1.9, 1.8, 1.1, 0.2],
+                [-72.0, 12.0, 2.7, 2.2, 2.0, -0.4, 0.24]
+            ];
+            cliffOutcrops.forEach(c => createSlantedCliffOutcrop(...c));
+
+            // Batu gurun dekoratif: secara default TIDAK memakai collider agar tidak mengganggu drifting!
+            function createDesertRock(x, z, scaleX, scaleY, scaleZ, rotY, withCollider = false) {
+                const y = getBaseTerrainHeight(x, z);
+                const geo = new THREE.DodecahedronGeometry(1.0, 1);
+                const pos = geo.attributes.position;
+                for (let i = 0; i < pos.count; i++) {
+                    const py = pos.getY(i);
+                    if (py < -0.2) pos.setY(i, -0.35);
+                    if (py > 0.55) pos.setY(i, 0.58);
+                }
+                geo.computeVertexNormals();
+                const rock = new THREE.Mesh(geo, rockMat);
+                rock.position.set(x, y + scaleY * 0.36, z);
+                rock.scale.set(scaleX, scaleY, scaleZ);
+                rock.rotation.y = rotY;
+                rock.castShadow = true;
+                rock.receiveShadow = true;
+                scene.add(rock);
+                if (withCollider && Math.max(scaleX, scaleZ) >= 2.6) {
+                    addCylinderCollider(x, z, Math.max(scaleX, scaleZ) * 0.65, scaleY * 1.4);
+                }
+            }
+
+            // Batu-batu latar utama seperti di video
+            const backgroundRocks = [
+                [-19.5, -25.0, 2.4, 1.6, 2.0, 0.2],
+                [-12.8, -28.0, 3.4, 2.1, 2.5, 1.1],
+                [-3.2, -26.5, 2.1, 1.4, 1.8, 0.5],
+                [5.5, -35.0, 3.1, 1.9, 2.4, 2.1],
+                [17.8, -32.0, 3.0, 1.9, 2.3, 0.8],
+                [-26.0, -32.0, 2.8, 1.8, 2.2, 0.4]
+            ];
+            backgroundRocks.forEach(r => createDesertRock(...r, false));
+
+            // --- TIANG TELEPON KAYU & JARINGAN KABEL LISTRIK DI SELURUH PULAU ---
+            function createUtilityPole(x, z, rotY = 0) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.14, 7.2, 7), woodDarkMat);
+                pole.position.y = 3.6;
+                pole.castShadow = true;
+                group.add(pole);
+
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.12), woodDarkMat);
+                arm.position.set(0, 6.7, 0);
+                arm.castShadow = true;
+                group.add(arm);
+
+                scene.add(group);
+                // Tanpa collider keras agar mobil tidak nyangkut saat drifting tipis di pinggir jalan
+            }
+
+            function createPowerLine(p1, p2) {
+                const y1 = getBaseTerrainHeight(p1[0], p1[1]) + 6.7;
+                const y2 = getBaseTerrainHeight(p2[0], p2[1]) + 6.7;
+                const pts = [];
+                const segs = 12;
+                for (let i = 0; i <= segs; i++) {
+                    const t = i / segs;
+                    const cx = THREE.MathUtils.lerp(p1[0], p2[0], t);
+                    const cz = THREE.MathUtils.lerp(p1[1], p2[1], t);
+                    const sag = Math.sin(t * Math.PI) * 0.85;
+                    const cy = THREE.MathUtils.lerp(y1, y2, t) - sag;
+                    pts.push(new THREE.Vector3(cx, cy, cz));
+                }
+                const curve = new THREE.CatmullRomCurve3(pts);
+                const wire = new THREE.Mesh(new THREE.TubeGeometry(curve, 12, 0.028, 5, false), carBlackMat);
+                wire.castShadow = true;
+                scene.add(wire);
+            }
+
+            function createUtilityPoleLine(poleCoords) {
+                for (let i = 0; i < poleCoords.length; i++) {
+                    const [px, pz] = poleCoords[i];
+                    let rot = 0.25;
+                    if (i < poleCoords.length - 1) {
+                        rot = Math.atan2(poleCoords[i + 1][0] - px, poleCoords[i + 1][1] - pz);
+                    }
+                    createUtilityPole(px, pz, rot);
+                    if (i < poleCoords.length - 1) {
+                        createPowerLine(poleCoords[i], poleCoords[i + 1]);
+                    }
+                }
+            }
+
+            // Jalur Kabel 1: Utara menuju pantai (persis video 00:00 - 00:06)
+            createUtilityPoleLine([
+                [-2.2, -1.8], [-6.8, -14.5], [-1.5, -26.5], [6.2, -37.5]
+            ]);
+            // Jalur Kabel 2: Cabang ke Desa Barat Laut (Western Outpost)
+            createUtilityPoleLine([
+                [-6.8, -14.5], [-18.0, -12.0], [-30.0, -14.0], [-42.0, -16.0], [-54.0, -18.0]
+            ]);
+            // Jalur Kabel 3: Cabang ke Pom Bensin & Diner Timur
+            createUtilityPoleLine([
+                [-2.2, -1.8], [10.5, 1.5], [23.0, -1.0], [35.5, -3.5], [48.0, -4.0]
+            ]);
+            // Jalur Kabel 4: Cabang Selatan menuju Oasis & Dermaga Pantai
+            createUtilityPoleLine([
+                [-10.5, 12.0], [-20.0, 24.0], [-14.0, 40.0], [-4.0, 56.0], [1.0, 70.0]
+            ]);
+
+            // --- BARRIER & TUMPUKAN BAN DI KANAN BAWAH ---
+            function createBarrierRow(bx, bz, rotY, count = 3) {
+                const by = getBaseTerrainHeight(bx, bz);
+                const bGroup = new THREE.Group();
+                bGroup.position.set(bx, by, bz);
+                bGroup.rotation.y = rotY;
+
+                for (let i = 0; i < count; i++) {
+                    const mat = i % 2 === 0 ? barrierMat : barrierRedMat;
+                    const seg = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.05, 2.5), mat);
+                    seg.position.set(0, 0.52, (i - (count - 1) * 0.5) * 2.55);
+                    seg.castShadow = true;
+                    seg.receiveShadow = true;
+                    bGroup.add(seg);
+                }
+                scene.add(bGroup);
+                addBoxCollider(bx, bz, 0.75, count * 2.55, rotY, 1.2);
+            }
+
+            function createBarrierAndTires() {
+                createBarrierRow(11.2, 11.8, 0.48, 3);
+                createBarrierRow(-24.0, 12.0, -0.35, 3);
+                createBarrierRow(26.0, -18.0, 0.72, 3);
+                createBarrierRow(-12.0, 48.0, 1.15, 4);
+                createBarrierRow(34.0, 42.0, -0.6, 3);
+
+                const tireStacks = [
+                    [7.4, 12.6], [8.3, 13.1], [7.7, 13.9],
+                    [-21.5, 13.2], [-20.6, 13.7],
+                    [28.5, -16.5], [29.3, -16.0],
+                    [12.5, 55.5], [-19.5, 55.5]
+                ];
+                tireStacks.forEach(([tx, tz], idx) => {
+                    const ty = getBaseTerrainHeight(tx, tz);
+                    const layers = (idx % 3 === 0) ? 2 : 1;
+                    for (let l = 0; l < layers; l++) {
+                        const tire = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.19, 8, 14), tireMat);
+                        tire.position.set(tx, ty + 0.2 + l * 0.4, tz);
+                        tire.rotation.x = Math.PI / 2;
+                        tire.castShadow = true;
+                        tire.receiveShadow = true;
+                        scene.add(tire);
+                    }
+                });
+            }
+            createBarrierAndTires();
+
+            // =========================================================================
+            // ZONA 2: BARAT LAUT — DESA GURUN TUA (WESTERN OUTPOST TOWN & WAREHOUSES)
+            // =========================================================================
+            function createWesternBuilding(x, z, rotY, w, h, d, wallMat, hasFalseFront = true, hasTower = false) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const mainBox = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wallMat);
+                mainBox.position.set(0, h * 0.5, 0);
+                mainBox.castShadow = true;
+                mainBox.receiveShadow = true;
+                group.add(mainBox);
+
+                const roof = new THREE.Mesh(new THREE.BoxGeometry(w + 0.7, 0.28, d + 0.7), roofMat);
+                roof.position.set(0, h + 0.14, 0);
+                roof.castShadow = true;
+                group.add(roof);
+
+                if (hasFalseFront) {
+                    const facadeH = h + 1.6;
+                    const facade = new THREE.Mesh(new THREE.BoxGeometry(w + 0.2, facadeH, 0.28), wallMat);
+                    facade.position.set(0, facadeH * 0.5, d * 0.5 + 0.05);
+                    facade.castShadow = true;
+                    group.add(facade);
+
+                    const cornice = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, 0.25, 0.45), woodDarkMat);
+                    cornice.position.set(0, facadeH + 0.1, d * 0.5 + 0.05);
+                    group.add(cornice);
+
+                    const signBoard = new THREE.Mesh(new THREE.BoxGeometry(w * 0.7, 0.75, 0.14), woodDarkMat);
+                    signBoard.position.set(0, h + 0.65, d * 0.5 + 0.22);
+                    group.add(signBoard);
+                }
+
+                if (hasTower) {
+                    const tw = w * 0.45;
+                    const th = h + 3.8;
+                    const tower = new THREE.Mesh(new THREE.BoxGeometry(tw, th, tw), wallMat);
+                    tower.position.set(0, th * 0.5, -d * 0.2);
+                    tower.castShadow = true;
+                    group.add(tower);
+
+                    const spire = new THREE.Mesh(new THREE.ConeGeometry(tw * 0.85, 2.2, 4), roofMat);
+                    spire.position.set(0, th + 1.1, -d * 0.2);
+                    spire.rotation.y = Math.PI * 0.25;
+                    spire.castShadow = true;
+                    group.add(spire);
+                }
+
+                // Teras Kayu & Tiang Penyangga Depan
+                const porch = new THREE.Mesh(new THREE.BoxGeometry(w + 0.4, 0.18, 2.2), roofMat);
+                porch.position.set(0, 2.75, d * 0.5 + 1.05);
+                porch.rotation.x = 0.16;
+                porch.castShadow = true;
+                group.add(porch);
+
+                for (let px of [-w * 0.44, 0, w * 0.44]) {
+                    const post = new THREE.Mesh(new THREE.BoxGeometry(0.2, 2.75, 0.2), woodDarkMat);
+                    post.position.set(px, 1.37, d * 0.5 + 1.95);
+                    post.castShadow = true;
+                    group.add(post);
+                }
+
+                const door = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.2, 0.12), darkWindowMat);
+                door.position.set(0, 1.1, d * 0.5 + 0.15);
+                group.add(door);
+
+                for (let wx of [-w * 0.3, w * 0.3]) {
+                    const win = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.1, 0.12), darkWindowMat);
+                    win.position.set(wx, 1.8, d * 0.5 + 0.15);
+                    group.add(win);
+                }
+
+                scene.add(group);
+                addBoxCollider(x, z, w + 0.5, d + 1.8, rotY, h + 2.0);
+            }
+
+            // Bangunan-bangunan Desa Barat Laut (Western Outpost Town)
+            createWesternBuilding(-38.0, -18.5, 0.25, 6.8, 4.2, 5.6, woodLightMat, true, false);   // Grand Saloon
+            createWesternBuilding(-47.5, -15.5, 0.32, 6.0, 3.8, 5.2, stuccoCreamMat, true, false); // General Store
+            createWesternBuilding(-56.5, -11.0, 0.45, 5.5, 4.4, 5.5, sandstoneMat, false, true);   // Old Bell Tower Church
+            createWesternBuilding(-35.0, -6.5, -2.85, 7.4, 4.0, 5.8, rustOrangeMat, false, false); // Freight Barn
+            createWesternBuilding(-46.5, -3.5, -2.75, 5.8, 3.6, 5.0, woodLightMat, true, false);   // Sheriff & Telegraph Office
+
+            // Gerobak Kayu Tua (Old Western Wagons)
+            function createWoodenWagon(x, z, rotY) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const bed = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.75, 3.4), woodLightMat);
+                bed.position.set(0, 0.95, 0);
+                bed.castShadow = true;
+                group.add(bed);
+
+                const ribCover = new THREE.Mesh(new THREE.CylinderGeometry(1.05, 1.05, 3.2, 9, 1, false, 0, Math.PI), stuccoCreamMat);
+                ribCover.rotation.z = Math.PI / 2;
+                ribCover.rotation.y = Math.PI / 2;
+                ribCover.position.set(0, 1.32, 0);
+                ribCover.castShadow = true;
+                group.add(ribCover);
+
+                for (let wx of [-1.05, 1.05]) {
+                    for (let wz of [-1.1, 1.1]) {
+                        const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.14, 12), woodDarkMat);
+                        wheel.rotation.z = Math.PI / 2;
+                        wheel.position.set(wx, 0.55, wz);
+                        wheel.castShadow = true;
+                        group.add(wheel);
+                    }
+                }
+                scene.add(group);
+                addBoxCollider(x, z, 2.2, 3.6, rotY, 2.4);
+            }
+            createWoodenWagon(-41.5, -11.5, 0.6);
+            createWoodenWagon(-52.0, -8.0, -0.4);
+            createWoodenWagon(-15.5, 5.5, 1.1);
+
+            // Menara Tangki Air Gurun (Desert Water Towers)
+            function createWaterTower(x, z) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+
+                const legOffsets = [[-1.3, -1.3], [1.3, -1.3], [1.3, 1.3], [-1.3, 1.3]];
+                legOffsets.forEach(([lx, lz]) => {
+                    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 6.8, 6), woodDarkMat);
+                    leg.position.set(lx, 3.4, lz);
+                    leg.castShadow = true;
+                    group.add(leg);
+                });
+
+                for (let h of [2.2, 4.5]) {
+                    const brace1 = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.14, 2.8), woodDarkMat);
+                    brace1.position.set(0, h, 0);
+                    brace1.castShadow = true;
+                    group.add(brace1);
+                }
+
+                const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.95, 1.95, 3.4, 14), woodLightMat);
+                tank.position.set(0, 8.2, 0);
+                tank.castShadow = true;
+                group.add(tank);
+
+                const coneRoof = new THREE.Mesh(new THREE.ConeGeometry(2.15, 1.3, 14), roofMat);
+                coneRoof.position.set(0, 10.55, 0);
+                coneRoof.castShadow = true;
+                group.add(coneRoof);
+
+                scene.add(group);
+                addBoxCollider(x, z, 3.1, 3.1, 0, 11.0);
+            }
+            createWaterTower(-31.0, -16.5);
+            createWaterTower(19.0, 22.0);
+
+            // =========================================================================
+            // ZONA 3: TIMUR — POM BENSIN ROUTE 66, DINER, CONTAINER YARD & RADIO TOWER
+            // =========================================================================
+            function createGasStationAndDiner(x, z, rotY) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                // Kanopi Pom Bensin (Bisa dilewati mobil di kolongnya!)
+                const canopyW = 11.5;
+                const canopyL = 6.8;
+                const canopyH = 4.6;
+                const canopyRoof = new THREE.Mesh(new THREE.BoxGeometry(canopyW, 0.45, canopyL), whitePaintMat);
+                canopyRoof.position.set(0, canopyH, 0);
+                canopyRoof.castShadow = true;
+                group.add(canopyRoof);
+
+                const trim = new THREE.Mesh(new THREE.BoxGeometry(canopyW + 0.15, 0.28, canopyL + 0.15), lighthouseRedMat);
+                trim.position.set(0, canopyH + 0.1, 0);
+                group.add(trim);
+
+                // Dua Pilar Penyangga Kanopi + Pompa Bensin (Collider terpisah kiri-kanan)
+                for (let side of [-1, 1]) {
+                    const px = side * 4.2;
+                    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.32, canopyH, 10), metalTrussMat);
+                    pillar.position.set(px, canopyH * 0.5, 0);
+                    pillar.castShadow = true;
+                    group.add(pillar);
+
+                    const pump = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.65, 0.55), lighthouseRedMat);
+                    pump.position.set(px, 0.82, 1.15);
+                    pump.castShadow = true;
+                    group.add(pump);
+
+                    const worldPx = x + Math.cos(rotY) * px;
+                    const worldPz = z - Math.sin(rotY) * px;
+                    addCylinderCollider(worldPx, worldPz, 0.85, canopyH);
+                }
+
+                // Gedung Diner di Belakang Kanopi
+                const diner = new THREE.Mesh(new THREE.BoxGeometry(10.5, 3.8, 5.8), stuccoCreamMat);
+                diner.position.set(0, 1.9, -7.2);
+                diner.castShadow = true;
+                diner.receiveShadow = true;
+                group.add(diner);
+
+                const dinerStripe = new THREE.Mesh(new THREE.BoxGeometry(10.65, 0.45, 5.95), tealMetalMat);
+                dinerStripe.position.set(0, 3.2, -7.2);
+                group.add(dinerStripe);
+
+                const dinerGlass = new THREE.Mesh(new THREE.BoxGeometry(8.2, 1.5, 0.15), carGlassMat);
+                dinerGlass.position.set(0, 1.8, -4.28);
+                group.add(dinerGlass);
+
+                // Papan Nama Rooftop Diner
+                const roofSign = new THREE.Mesh(new THREE.BoxGeometry(5.5, 1.6, 0.3), lighthouseRedMat);
+                roofSign.position.set(0, 4.8, -6.5);
+                roofSign.castShadow = true;
+                group.add(roofSign);
+
+                scene.add(group);
+
+                const dinerWorldX = x + Math.sin(rotY) * (-7.2);
+                const dinerWorldZ = z + Math.cos(rotY) * (-7.2);
+                addBoxCollider(dinerWorldX, dinerWorldZ, 10.8, 6.0, rotY, 5.2);
+            }
+            createGasStationAndDiner(32.0, -3.5, -0.25);
+
+            // Papan Reklame Jalan Raya Gurun (Highway Billboards)
+            function createBillboard(x, z, rotY) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                for (let px of [-2.4, 2.4]) {
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 6.8, 8), metalTrussMat);
+                    post.position.set(px, 3.4, 0);
+                    post.castShadow = true;
+                    group.add(post);
+                }
+
+                const board = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.4, 0.35), stuccoCreamMat);
+                board.position.set(0, 5.8, 0);
+                board.castShadow = true;
+                group.add(board);
+
+                const border = new THREE.Mesh(new THREE.BoxGeometry(7.5, 3.7, 0.25), rustOrangeMat);
+                border.position.set(0, 5.8, -0.08);
+                group.add(border);
+
+                scene.add(group);
+                addBoxCollider(x, z, 5.5, 0.8, rotY, 7.5);
+            }
+            createBillboard(21.5, 4.5, 0.45);
+            createBillboard(-25.0, -10.5, -0.35);
+            createBillboard(-6.0, 38.0, 0.85);
+
+            // Menara Pemancar Radio Tinggi Merah-Putih
+            function createRadioTower(x, z) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+
+                const levels = 7;
+                const segH = 3.2;
+                for (let l = 0; l < levels; l++) {
+                    const mat = l % 2 === 0 ? lighthouseRedMat : whitePaintMat;
+                    const rBot = 1.9 - l * 0.21;
+                    const rTop = 1.9 - (l + 1) * 0.21;
+                    const seg = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, segH, 4, 1, true), mat);
+                    seg.position.y = l * segH + segH * 0.5;
+                    seg.rotation.y = Math.PI * 0.25;
+                    seg.castShadow = true;
+                    group.add(seg);
+                }
+
+                const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.18, 5.5, 8), lighthouseRedMat);
+                mast.position.y = levels * segH + 2.75;
+                mast.castShadow = true;
+                group.add(mast);
+
+                const beaconBulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 8), tailLightMat);
+                beaconBulb.position.y = levels * segH + 5.6;
+                group.add(beaconBulb);
+
+                scene.add(group);
+                addCylinderCollider(x, z, 1.85, 28.0);
+            }
+            createRadioTower(52.0, -8.5);
+
+            // Yard Kontainer Kargo Warna-Warni
+            function createCargoContainer(x, z, yOffset, rotY, mat) {
+                const y = getBaseTerrainHeight(x, z) + yOffset;
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(2.8, 2.8, 6.8), mat);
+                mesh.position.set(x, y + 1.4, z);
+                mesh.rotation.y = rotY;
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+                scene.add(mesh);
+                if (yOffset < 0.5) {
+                    addBoxCollider(x, z, 2.9, 6.9, rotY, 5.6);
+                }
+            }
+            createCargoContainer(46.0, 6.5, 0, 0.2, rustOrangeMat);
+            createCargoContainer(49.2, 5.8, 0, 0.2, containerBlueMat);
+            createCargoContainer(47.6, 6.1, 2.8, 0.2, containerGreenMat);
+            createCargoContainer(54.5, 12.0, 0, -0.45, tealMetalMat);
+            createCargoContainer(-58.0, -22.0, 0, 0.65, rustOrangeMat);
+
+            // =========================================================================
+            // ZONA 4: TENGGARA & SELATAN — KANYON BATU, KUIL KUNO & REL KERETA TAMBANG
+            // =========================================================================
+            // Lengkungan Batu Alami Raksasa (Natural Rock Archway — Bisa Dilewati Mobil!)
+            function createNaturalRockArch(x, z, rotY, span = 14.5, height = 10.5) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                for (let side of [-1, 1]) {
+                    const bx = side * (span * 0.5);
+                    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.1, height, 8), pillarRockMat);
+                    pillar.position.set(bx, height * 0.5 - 0.4, 0);
+                    pillar.castShadow = true;
+                    pillar.receiveShadow = true;
+                    group.add(pillar);
+
+                    const worldPx = x + Math.cos(rotY) * bx;
+                    const worldPz = z - Math.sin(rotY) * bx;
+                    addCylinderCollider(worldPx, worldPz, 2.6, height);
+                }
+
+                // Balok Batu Melengkung di Atas
+                const archSegments = 7;
+                for (let i = 0; i < archSegments; i++) {
+                    const t = (i / (archSegments - 1)) - 0.5;
+                    const ax = t * (span + 1.5);
+                    const ay = height - Math.pow(t * 2.0, 2) * 2.2 + 1.2;
+                    const block = new THREE.Mesh(new THREE.DodecahedronGeometry(2.35, 1), pillarRockMat);
+                    block.position.set(ax, ay, (seededRandom() - 0.5) * 0.5);
+                    block.scale.set(1.3, 0.85, 1.1);
+                    block.castShadow = true;
+                    block.receiveShadow = true;
+                    group.add(block);
+                }
+
+                scene.add(group);
+            }
+            createNaturalRockArch(42.0, 34.0, 0.55, 15.0, 10.8);
+            createNaturalRockArch(-24.0, 42.0, -0.4, 13.5, 9.6);
+
+            // Reruntuhan Kuil Gurun Kuno (Ancient Desert Temple Ruins)
+            function createAncientTempleRuins(cx, cz) {
+                const baseY = getBaseTerrainHeight(cx, cz);
+                const group = new THREE.Group();
+                group.position.set(cx, baseY, cz);
+
+                // Altar Batu Bertingkat di Tengah
+                const step1 = new THREE.Mesh(new THREE.BoxGeometry(11.0, 0.55, 11.0), sandstoneMat);
+                step1.position.y = 0.25;
+                step1.receiveShadow = true;
+                group.add(step1);
+
+                // 8 Pilar Batu Pasir Kuno & Balok Lintel di Atasnya
+                const colRadius = 7.2;
+                for (let i = 0; i < 8; i++) {
+                    const ang = (i / 8) * Math.PI * 2;
+                    const px = Math.cos(ang) * colRadius;
+                    const pz = Math.sin(ang) * colRadius;
+                    const colH = (i % 3 === 0) ? 3.4 : 5.8; // Beberapa pilar patah alami
+                    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.68, colH, 10), sandstoneMat);
+                    col.position.set(px, colH * 0.5, pz);
+                    col.castShadow = true;
+                    col.receiveShadow = true;
+                    group.add(col);
+
+                    const cap = new THREE.Mesh(new THREE.BoxGeometry(1.45, 0.38, 1.45), sandstoneMat);
+                    cap.position.set(px, colH + 0.18, pz);
+                    cap.castShadow = true;
+                    group.add(cap);
+
+                    addCylinderCollider(cx + px, cz + pz, 0.72, colH);
+                }
+
+                // Obelisk Kembar di Pintu Masuk Kuil
+                for (let side of [-3.6, 3.6]) {
+                    const obelisk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.75, 8.5, 4), sandstoneMat);
+                    obelisk.position.set(side, 4.25, 10.5);
+                    obelisk.rotation.y = Math.PI * 0.25;
+                    obelisk.castShadow = true;
+                    group.add(obelisk);
+                    addCylinderCollider(cx + side, cz + 10.5, 0.78, 8.5);
+                }
+
+                scene.add(group);
+            }
+            createAncientTempleRuins(22.0, 48.0);
+
+            // Jalur Rel Kereta Tambang Tua (Old Mine Railway Track Membelah Gurun Selatan)
+            function createMineRailwayTrack() {
+                const trackPoints = [
+                    new THREE.Vector3(-42, 0, 52),
+                    new THREE.Vector3(-18, 0, 48),
+                    new THREE.Vector3(6, 0, 42),
+                    new THREE.Vector3(28, 0, 32),
+                    new THREE.Vector3(48, 0, 20),
+                    new THREE.Vector3(64, 0, 8)
+                ];
+                trackPoints.forEach(p => {
+                    p.y = getBaseTerrainHeight(p.x, p.z) + 0.08;
+                });
+
+                const curve = new THREE.CatmullRomCurve3(trackPoints);
+                const sleeperCount = 115;
+                const sleeperGeo = new THREE.BoxGeometry(2.4, 0.14, 0.32);
+                const sleeperInst = new THREE.InstancedMesh(sleeperGeo, woodDarkMat, sleeperCount);
+                sleeperInst.castShadow = true;
+                sleeperInst.receiveShadow = true;
+
+                const leftRailPts = [];
+                const rightRailPts = [];
+
+                for (let i = 0; i < sleeperCount; i++) {
+                    const t = i / (sleeperCount - 1);
+                    const pt = curve.getPoint(t);
+                    const tan = curve.getTangent(t);
+                    const py = getBaseTerrainHeight(pt.x, pt.z) + 0.07;
+                    const angle = Math.atan2(tan.x, tan.z);
+
+                    dummyPos.set(pt.x, py, pt.z);
+                    dummyEuler.set(0, angle, 0);
+                    dummyQuat.setFromEuler(dummyEuler);
+                    dummyScale.set(1, 1, 1);
+                    dummyMatrix.compose(dummyPos, dummyQuat, dummyScale);
+                    sleeperInst.setMatrixAt(i, dummyMatrix);
+
+                    const rx = Math.cos(angle) * 0.75;
+                    const rz = -Math.sin(angle) * 0.75;
+                    leftRailPts.push(new THREE.Vector3(pt.x - rx, py + 0.1, pt.z - rz));
+                    rightRailPts.push(new THREE.Vector3(pt.x + rx, py + 0.1, pt.z + rz));
+                }
+                sleeperInst.instanceMatrix.needsUpdate = true;
+                scene.add(sleeperInst);
+
+                const leftRailCurve = new THREE.CatmullRomCurve3(leftRailPts);
+                const rightRailCurve = new THREE.CatmullRomCurve3(rightRailPts);
+                const railL = new THREE.Mesh(new THREE.TubeGeometry(leftRailCurve, 90, 0.06, 5, false), railSteelMat);
+                const railR = new THREE.Mesh(new THREE.TubeGeometry(rightRailCurve, 90, 0.06, 5, false), railSteelMat);
+                scene.add(railL, railR);
+
+                // Struktur Hopper Tambang Tua di Ujung Timur Rel (64, 8)
+                const hx = 64.0, hz = 8.0;
+                const hy = getBaseTerrainHeight(hx, hz);
+                const hopperGroup = new THREE.Group();
+                hopperGroup.position.set(hx, hy, hz);
+                hopperGroup.rotation.y = -0.5;
+
+                const towerBox = new THREE.Mesh(new THREE.BoxGeometry(5.5, 7.8, 5.5), woodDarkMat);
+                towerBox.position.y = 5.2;
+                towerBox.castShadow = true;
+                hopperGroup.add(towerBox);
+
+                const chute = new THREE.Mesh(new THREE.ConeGeometry(3.8, 3.2, 4), rustOrangeMat);
+                chute.rotation.x = Math.PI;
+                chute.rotation.y = Math.PI * 0.25;
+                chute.position.y = 2.6;
+                hopperGroup.add(chute);
+
+                scene.add(hopperGroup);
+                addBoxCollider(hx, hz, 5.6, 5.6, -0.5, 9.5);
+            }
+            createMineRailwayTrack();
+
+            // =========================================================================
+            // ZONA 5: BARAT DAYA — HUTAN PALEM OASIS, JEMBATAN KAYU & PONDOK AIR
+            // =========================================================================
+            // Jembatan Kayu Penyeberangan Danau Oasis (-48, 28)
+            function createOasisBridge(x, z, rotY) {
+                const deckY = OASIS_WATER_LEVEL + 0.55;
+                const bLen = 22.0;
+                const bW = 5.4;
+                const group = new THREE.Group();
+                group.position.set(x, deckY, z);
+                group.rotation.y = rotY;
+
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(bW, 0.28, bLen), woodLightMat);
+                deck.castShadow = true;
+                deck.receiveShadow = true;
+                group.add(deck);
+
+                for (let side of [-bW * 0.46, bW * 0.46]) {
+                    for (let pz = -bLen * 0.45; pz <= bLen * 0.45; pz += 3.6) {
+                        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 3.8, 7), woodDarkMat);
+                        post.position.set(side, -0.8, pz);
+                        post.castShadow = true;
+                        group.add(post);
+                    }
+                    const handrail = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.16, bLen), woodDarkMat);
+                    handrail.position.set(side, 0.95, 0);
+                    handrail.castShadow = true;
+                    group.add(handrail);
+                }
+
+                scene.add(group);
+                ramps.push({
+                    x,
+                    z,
+                    baseY: deckY + 0.12,
+                    width: bW,
+                    length: bLen,
+                    halfW: bW * 0.5,
+                    halfL: bLen * 0.5,
+                    height: 0.0,
+                    slopeTan: 0.0,
+                    cos: Math.cos(rotY),
+                    sin: Math.sin(rotY),
+                    isPier: true
+                });
+            }
+            createOasisBridge(-48.0, 28.0, 0.42);
+
+            // =========================================================================
+            // ZONA 6: BARAT — LADANG KINCIR ANGIN BERPUTAR & SOLAR PANEL ARRAY
+            // =========================================================================
+            function createRotatingWindmill(x, z, rotY = 0) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                const towerH = 12.5;
+                const tower = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1.35, towerH, 4, 1), metalTrussMat);
+                tower.position.y = towerH * 0.5;
+                tower.rotation.y = Math.PI * 0.25;
+                tower.castShadow = true;
+                group.add(tower);
+
+                const hub = new THREE.Group();
+                hub.position.set(0, towerH, 0.55);
+                group.add(hub);
+
+                const nose = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.35, 0.9, 8), rustOrangeMat);
+                nose.rotation.x = Math.PI / 2;
+                hub.add(nose);
+
+                const bladeCount = 8;
+                for (let b = 0; b < bladeCount; b++) {
+                    const ang = (b / bladeCount) * Math.PI * 2;
+                    const bladePivot = new THREE.Group();
+                    bladePivot.rotation.z = ang;
+                    const blade = new THREE.Mesh(new THREE.BoxGeometry(0.48, 3.1, 0.06), barrierMat);
+                    blade.position.y = 1.85;
+                    blade.rotation.y = 0.28;
+                    blade.castShadow = true;
+                    bladePivot.add(blade);
+                    hub.add(bladePivot);
+                }
+
+                scene.add(group);
+                addCylinderCollider(x, z, 1.3, towerH);
+                animatedWindmills.push({ hub, speed: 1.6 + seededRandom() * 0.9 });
+            }
+
+            [
+                [-64.0, -4.0, 0.4],
+                [-72.0, 8.0, 0.5],
+                [-58.0, 10.0, 0.3],
+                [-68.0, -18.0, 0.6],
+                [26.0, -18.0, -0.4],
+                [14.0, 32.0, 0.2]
+            ].forEach(w => createRotatingWindmill(...w));
+
+            // Barisan Panel Surya Gurun (Solar Panel Array)
+            function createSolarPanelRow(cx, cz, count = 4) {
+                for (let i = 0; i < count; i++) {
+                    const px = cx + i * 4.4;
+                    const pz = cz;
+                    const py = getBaseTerrainHeight(px, pz);
+                    const group = new THREE.Group();
+                    group.position.set(px, py, pz);
+
+                    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.8, 8), metalTrussMat);
+                    post.position.y = 0.9;
+                    post.castShadow = true;
+                    group.add(post);
+
+                    const frame = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 2.4), barrierMat);
+                    frame.position.y = 1.85;
+                    frame.rotation.x = 0.42;
+                    frame.castShadow = true;
+                    group.add(frame);
+
+                    const glass = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.14, 2.2), solarPanelMat);
+                    glass.position.y = 1.87;
+                    glass.rotation.x = 0.42;
+                    group.add(glass);
+
+                    scene.add(group);
+                    addBoxCollider(px, pz, 3.6, 2.2, 0, 2.6);
+                }
+            }
+            createSolarPanelRow(-58.0, -34.0, 4);
+            createSolarPanelRow(-58.0, -29.5, 4);
+
+            // =========================================================================
+            // ZONA 7: PESISIR PANTAI 360° (MERCUSUAR, BANGKAI KAPAL, PERAHU, TIKI HUT)
+            // =========================================================================
+            // 1) Mercusuar Merah-Putih dengan Sorot Lampu Berputar di Tanjung Tenggara
+            function createCoastalLighthouse(x, z) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+
+                const rockBase = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 5.5, 2.2, 9), rockMat);
+                rockBase.position.y = 0.8;
+                rockBase.castShadow = true;
+                rockBase.receiveShadow = true;
+                group.add(rockBase);
+
+                const bands = 5;
+                const bandH = 3.2;
+                for (let b = 0; b < bands; b++) {
+                    const rBot = 2.6 - b * 0.22;
+                    const rTop = 2.6 - (b + 1) * 0.22;
+                    const mat = b % 2 === 0 ? lighthouseRedMat : whitePaintMat;
+                    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, bandH, 14), mat);
+                    cyl.position.y = 1.8 + b * bandH + bandH * 0.5;
+                    cyl.castShadow = true;
+                    cyl.receiveShadow = true;
+                    group.add(cyl);
+                }
+
+                const topY = 1.8 + bands * bandH;
+                const gallery = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 1.9, 0.45, 14), carBlackMat);
+                gallery.position.y = topY + 0.2;
+                group.add(gallery);
+
+                const lantern = new THREE.Mesh(new THREE.CylinderGeometry(1.35, 1.35, 2.2, 12), headLightMat);
+                lantern.position.y = topY + 1.4;
+                group.add(lantern);
+
+                const dome = new THREE.Mesh(new THREE.ConeGeometry(1.65, 1.6, 12), lighthouseRedMat);
+                dome.position.y = topY + 3.2;
+                group.add(dome);
+
+                // Sorot Lampu Mercusuar Kembar yang Berputar 360°
+                lighthouseBeaconGroup = new THREE.Group();
+                lighthouseBeaconGroup.position.y = topY + 1.4;
+                for (let dir of [-1, 1]) {
+                    const coneGeo = new THREE.ConeGeometry(3.2, 26.0, 12, 1, true);
+                    coneGeo.translate(0, -13.0, 0);
+                    coneGeo.rotateX(Math.PI * 0.5 * dir);
+                    const beam = new THREE.Mesh(coneGeo, beaconLightMat);
+                    lighthouseBeaconGroup.add(beam);
+                }
+                group.add(lighthouseBeaconGroup);
+
+                scene.add(group);
+                addCylinderCollider(x, z, 4.4, 24.0);
+            }
+            createCoastalLighthouse(78.0, 48.0);
+
+            // 2) Bangkai Kapal Kayu Tua Terdampar di Pantai Timur (Beached Shipwreck)
+            function createBeachedShipwreck(x, z, rotY) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y + 0.3, z);
+                group.rotation.set(0.12, rotY, -0.26); // Miring terdampar di pasir pantai
+
+                // Lambung kapal kayu
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.4, 13.5), woodDarkMat);
+                hull.position.y = 1.1;
+                hull.castShadow = true;
+                hull.receiveShadow = true;
+                group.add(hull);
+
+                const bow = new THREE.Mesh(new THREE.ConeGeometry(2.4, 4.5, 4), woodLightMat);
+                bow.rotation.x = -Math.PI * 0.5;
+                bow.rotation.z = Math.PI * 0.25;
+                bow.position.set(0, 1.4, -8.8);
+                bow.castShadow = true;
+                group.add(bow);
+
+                // Tulang rusuk lambung kapal
+                for (let rz = -5.0; rz <= 5.0; rz += 2.0) {
+                    for (let side of [-2.35, 2.35]) {
+                        const rib = new THREE.Mesh(new THREE.BoxGeometry(0.25, 3.1, 0.28), woodLightMat);
+                        rib.position.set(side, 1.6, rz);
+                        rib.castShadow = true;
+                        group.add(rib);
+                    }
+                }
+
+                // Tiang Layar Patah & Kain Layar Robek
+                const mast1 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.28, 9.5, 8), woodDarkMat);
+                mast1.position.set(0, 5.2, -1.8);
+                mast1.castShadow = true;
+                group.add(mast1);
+
+                const yardArm = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 6.8, 6), woodLightMat);
+                yardArm.rotation.z = Math.PI * 0.5 + 0.18;
+                yardArm.position.set(0, 7.6, -1.8);
+                yardArm.castShadow = true;
+                group.add(yardArm);
+
+                const sail = new THREE.Mesh(new THREE.BoxGeometry(5.6, 2.8, 0.08), stuccoCreamMat);
+                sail.position.set(0, 6.1, -1.65);
+                sail.rotation.z = 0.18;
+                sail.castShadow = true;
+                group.add(sail);
+
+                scene.add(group);
+                addBoxCollider(x, z, 4.8, 15.0, rotY, 9.0);
+            }
+            createBeachedShipwreck(64.0, -20.0, 0.65);
+            createBeachedShipwreck(-84.0, 32.0, -0.85);
+
+            // 3) Perahu Kayu Mengapung & Bergoyang di Air Laut
+            function createFloatingBoat(x, z, rotY) {
+                const group = new THREE.Group();
+                group.position.set(x, WATER_LEVEL + 0.15, z);
+                group.rotation.y = rotY;
+
+                const hull = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.75, 4.6), woodLightMat);
+                hull.position.y = 0.25;
+                hull.castShadow = true;
+                group.add(hull);
+
+                const stripe = new THREE.Mesh(new THREE.BoxGeometry(2.18, 0.2, 4.68), containerBlueMat);
+                stripe.position.y = 0.52;
+                group.add(stripe);
+
+                const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.95, 1.6), whitePaintMat);
+                cabin.position.set(0, 0.95, -0.4);
+                cabin.castShadow = true;
+                group.add(cabin);
+
+                scene.add(group);
+                floatingBoats.push({ group, baseX: x, baseZ: z, baseRotY: rotY, phase: seededRandom() * Math.PI * 2 });
+            }
+            createFloatingBoat(11.5, 92.0, 0.35);
+            createFloatingBoat(-7.5, 95.0, -0.45);
+            createFloatingBoat(36.0, -48.0, 1.15);
+            createFloatingBoat(-32.0, -72.0, -0.8);
+
+            // 4) Pondok Pantai Atap Jerami (Coastal Tiki Huts / Cabanas)
+            function createBeachTikiHut(x, z, rotY) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+                group.rotation.y = rotY;
+
+                for (let px of [-1.6, 1.6]) {
+                    for (let pz of [-1.6, 1.6]) {
+                        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.16, 3.0, 7), palmTrunkMat);
+                        post.position.set(px, 1.5, pz);
+                        post.castShadow = true;
+                        group.add(post);
+                    }
+                }
+
+                const thatchRoof = new THREE.Mesh(new THREE.ConeGeometry(3.2, 1.85, 8), thatchMat);
+                thatchRoof.position.y = 3.65;
+                thatchRoof.castShadow = true;
+                group.add(thatchRoof);
+
+                const counter = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.95, 0.7), woodLightMat);
+                counter.position.set(0, 0.48, 1.2);
+                counter.castShadow = true;
+                group.add(counter);
+
+                scene.add(group);
+                addBoxCollider(x, z, 3.5, 3.5, rotY, 4.2);
+            }
+            createBeachTikiHut(-16.0, 74.0, 0.2);
+            createBeachTikiHut(24.0, 76.0, -0.35);
+            createBeachTikiHut(-64.0, 56.0, 0.75);
+            createBeachTikiHut(-38.0, 32.0, 1.2); // Pondok Tepi Oasis
+
+            // --- PAPAN LOMPATAN KAYU (JUMP RAMPS DI BERBAGAI ZONA) ---
+            function createJumpRamp(x, z, rotY, width = 5.8, length = 9.5, height = 2.05) {
+                const baseY = getBaseTerrainHeight(x, z) - 0.1;
+                const group = new THREE.Group();
+                group.position.set(x, baseY, z);
+                group.rotation.y = rotY;
+
+                const slopeAngle = Math.atan2(height, length);
+                const plankLen = Math.hypot(length, height);
+
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(width, 0.28, plankLen), woodLightMat);
+                deck.position.set(0, height * 0.5, 0);
+                deck.rotation.x = slopeAngle;
+                deck.castShadow = true;
+                deck.receiveShadow = true;
+                group.add(deck);
+
+                for (let side of [-width * 0.46, width * 0.46]) {
+                    const rail = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.36, plankLen), rampStripeMat);
+                    rail.position.set(side, height * 0.5 + 0.07, 0);
+                    rail.rotation.x = slopeAngle;
+                    rail.castShadow = true;
+                    group.add(rail);
+
+                    const post = new THREE.Mesh(new THREE.BoxGeometry(0.32, height, 0.32), woodDarkMat);
+                    post.position.set(side, height * 0.5, -length * 0.45);
+                    post.castShadow = true;
+                    group.add(post);
+                }
+
+                scene.add(group);
+                ramps.push({
+                    x,
+                    z,
+                    baseY,
+                    width,
+                    length,
+                    halfW: width * 0.5,
+                    halfL: length * 0.5,
+                    height,
+                    slopeTan: height / length,
+                    cos: Math.cos(rotY),
+                    sin: Math.sin(rotY),
+                    isPier: false
+                });
+            }
+
+            createJumpRamp(-22.0, 2.5, 0.25, 5.6, 9.2, 1.95);
+            createJumpRamp(21.0, 8.0, -0.55, 5.8, 9.5, 2.05);
+            createJumpRamp(-34.0, 16.0, 1.1, 5.5, 9.0, 1.95);
+            createJumpRamp(36.0, 24.0, 0.45, 6.0, 10.0, 2.25);  // Kanyon Ramp
+            createJumpRamp(-52.0, -28.0, -0.35, 6.2, 10.5, 2.35); // Stunt Park Mega Ramp
+            createJumpRamp(4.0, 62.0, Math.PI, 5.8, 9.2, 1.85);   // Ramp menuju Dermaga Pantai
+
+            // --- HUTAN POHON PALEM (OASIS & PESISIR PANTAI — 60+ POHON PALEM) ---
+            function createPalmTree(x, z, scale = 1.0) {
+                const y = getBaseTerrainHeight(x, z);
+                const group = new THREE.Group();
+                group.position.set(x, y, z);
+
+                const segs = 6;
+                let curY = 0, curX = 0;
+                const bend = (seededRandom() - 0.5) * 0.14;
+                for (let i = 0; i < segs; i++) {
+                    const rTop = (0.26 - i * 0.025) * scale;
+                    const rBot = (0.3 - i * 0.025) * scale;
+                    const segH = 1.05 * scale;
+                    const cyl = new THREE.Mesh(new THREE.CylinderGeometry(rTop, rBot, segH, 7), palmTrunkMat);
+                    cyl.position.set(curX, curY + segH * 0.5, 0);
+                    cyl.rotation.z = -bend * (i + 1);
+                    cyl.castShadow = true;
+                    group.add(cyl);
+                    curY += segH * 0.95;
+                    curX += Math.sin(bend * (i + 1)) * segH;
+                }
+
+                const crown = new THREE.Group();
+                crown.position.set(curX, curY, 0);
+                for (let f = 0; f < 7; f++) {
+                    const angle = (f / 7) * Math.PI * 2;
+                    const leaf = new THREE.Mesh(new THREE.BoxGeometry(0.55 * scale, 0.08 * scale, 2.8 * scale), palmLeafMat);
+                    leaf.position.set(Math.sin(angle) * 1.2 * scale, -0.2 * scale, Math.cos(angle) * 1.2 * scale);
+                    leaf.rotation.y = angle;
+                    leaf.rotation.x = 0.45;
+                    leaf.castShadow = true;
+                    crown.add(leaf);
+                }
+                group.add(crown);
+                scene.add(group);
+                // Tanpa collider keras pada batang pohon palem agar mobil lebih leluasa bermanuver di sekitar Oasis & Pantai
+            }
+
+            // Hutan Palem Rindang mengelilingi Danau Oasis (-48, 28)
+            for (let i = 0; i < 24; i++) {
+                const ang = (i / 24) * Math.PI * 2 + (seededRandom() - 0.5) * 0.2;
+                const rad = 12.2 + seededRandom() * 6.5;
+                const px = -48.0 + Math.cos(ang) * rad;
+                const pz = 28.0 + Math.sin(ang) * rad;
+                // Jangan menghalangi ujung Jembatan Oasis
+                if (Math.abs(px - (-48.0)) > 4.2 || Math.abs(pz - 28.0) > 12.5) {
+                    createPalmTree(px, pz, 0.85 + seededRandom() * 0.45);
+                }
+            }
+
+            // Pohon Palem Pesisir Pantai mengelilingi pulau
+            const coastalPalms = [
+                [-28, 72], [-18, 76], [14, 82], [26, 78], [48, 68], [62, 56],
+                [-68, -58], [-54, -64], [-78, 22], [-82, 42], [-62, 62],
+                [58, -12], [66, -4], [42, 68], [-44, 68]
+            ];
+            coastalPalms.forEach(([px, pz]) => createPalmTree(px, pz, 0.85 + seededRandom() * 0.45));
+
+            // --- KAKTUS SAGUARO & POHON GURUN JOSHUA (SEKARANG BISA RUNTUH / MENTAL SAAT DITABRAK!) ---
+            const smashableCactusQueue = [];
+
+            function createSaguaroCactus(x, z, scale = 1.0) {
+                smashableCactusQueue.push({ type: 'cactus', x, z, scale, rotY: seededRandom() * Math.PI * 2 });
+            }
+
+            function createJoshuaTree(x, z, scale = 1.0) {
+                smashableCactusQueue.push({ type: 'joshua', x, z, scale, rotY: seededRandom() * Math.PI * 2 });
+            }
+
+            // --- SCATTER PROSEDURAL SUPER PADAT DI SELURUH PULAU (ZERO EMPTY GROUND) ---
+            // 1) 400+ Semak Gurun Kering (InstancedMesh untuk performa tinggi + bayangan tajam)
+            function createScrubBushGeometry() {
+                const geom = new THREE.BufferGeometry();
+                const verts = [];
+                const norms = [];
+                for (let b = 0; b < 8; b++) {
+                    const ang = (b / 8) * Math.PI * 2 + (seededRandom() - 0.5) * 0.3;
+                    const h = 0.65 + seededRandom() * 0.55;
+                    const rad = 0.45 + seededRandom() * 0.45;
+                    const w = 0.08;
+                    const dx = Math.cos(ang);
+                    const dz = Math.sin(ang);
+                    verts.push(
+                        -dz * w, 0, dx * w,
+                        dz * w, 0, -dx * w,
+                        dx * rad, h, dz * rad
+                    );
+                    norms.push(0, 1, 0, 0, 1, 0, 0, 1, 0);
+                }
+                geom.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+                geom.setAttribute('normal', new THREE.Float32BufferAttribute(norms, 3));
+                geom.computeVertexNormals();
+                return geom;
+            }
+
+            const scrubBushGeo = createScrubBushGeometry();
+            const scrubList = [];
+
+            // Sebar semak kering di area utara video (persis 00:00 - 00:06)
+            for (let i = 0; i < 110; i++) {
+                const bx = -28 + seededRandom() * 58;
+                const bz = -8 - seededRandom() * 34;
+                if (getCoastlineSignedDistance(bx, bz) < -8.0) {
+                    scrubList.push({ x: bx, z: bz, s: 0.8 + seededRandom() * 0.7, r: seededRandom() * Math.PI * 2 });
+                }
+            }
+            // Sebar 310 semak kering tambahan merata di seluruh penjuru pulau
+            for (let i = 0; i < 310; i++) {
+                const bx = (seededRandom() - 0.5) * 220;
+                const bz = (seededRandom() - 0.5) * 220;
+                if (getCoastlineSignedDistance(bx, bz) < -8.0 && Math.hypot(bx, bz) > 7.5 && Math.hypot(bx - (-48), bz - 28) > 16.0) {
+                    scrubList.push({ x: bx, z: bz, s: 0.75 + seededRandom() * 0.85, r: seededRandom() * Math.PI * 2 });
+                }
+            }
+
+            const scrubInstanced = new THREE.InstancedMesh(scrubBushGeo, deadBushMat, scrubList.length);
+            scrubInstanced.castShadow = true;
+            scrubInstanced.receiveShadow = true;
+            for (let i = 0; i < scrubList.length; i++) {
+                const sb = scrubList[i];
+                const sy = getBaseTerrainHeight(sb.x, sb.z) - 0.04;
+                dummyPos.set(sb.x, sy, sb.z);
+                dummyEuler.set(0, sb.r, 0);
+                dummyQuat.setFromEuler(dummyEuler);
+                dummyScale.set(sb.s, sb.s, sb.s);
+                dummyMatrix.compose(dummyPos, dummyQuat, dummyScale);
+                scrubInstanced.setMatrixAt(i, dummyMatrix);
+            }
+            scrubInstanced.instanceMatrix.needsUpdate = true;
+            scene.add(scrubInstanced);
+
+            // 2) Sebar 150+ Kaktus Saguaro & Pohon Joshua (Bisa Runtuh!) + Batu Gurun Dekoratif Tanpa Collider Mengganggu
+            for (let i = 0; i < 155; i++) {
+                const cx = (seededRandom() - 0.5) * 215;
+                const cz = (seededRandom() - 0.5) * 215;
+                const cDist = getCoastlineSignedDistance(cx, cz);
+                const distCenter = Math.hypot(cx, cz);
+                const roadF = getDirtRoadFactor(cx, cz);
+                // Jangan taruh di tengah jalan tanah atau di dalam kolam Oasis
+                if (cDist < -12.0 && distCenter > 13.0 && roadF < 0.35 && Math.hypot(cx - (-48), cz - 28) > 13.5) {
+                    if (i % 4 === 0) {
+                        createJoshuaTree(cx, cz, 0.8 + seededRandom() * 0.5);
+                    } else {
+                        createSaguaroCactus(cx, cz, 0.78 + seededRandom() * 0.6);
+                    }
+                }
+            }
+
+            // Kurangi batu-batu yang menghalangi jalan dan nonaktifkan collider batu kecil/sedang
+            for (let i = 0; i < 95; i++) {
+                const rx = (seededRandom() - 0.5) * 230;
+                const rz = (seededRandom() - 0.5) * 230;
+                const cDist = getCoastlineSignedDistance(rx, rz);
+                const distCenter = Math.hypot(rx, rz);
+                const roadF = getDirtRoadFactor(rx, rz);
+                if (cDist < -5.0 && distCenter > 18.0 && roadF < 0.15 && Math.hypot(rx - (-48), rz - 28) > 17.0) {
+                    const sx = 0.55 + seededRandom() * 0.85;
+                    const sy = sx * (0.45 + seededRandom() * 0.35);
+                    const sz = sx * (0.75 + seededRandom() * 0.35);
+                    createDesertRock(rx, rz, sx, sy, sz, seededRandom() * Math.PI * 2, false);
+                }
+            }
+
+            // Dermaga Kayu di Pantai Selatan
+            function createCoastalPier(x, z) {
+                const group = new THREE.Group();
+                const deckElevation = WATER_LEVEL + 0.92;
+                group.position.set(x, deckElevation, z);
+
+                const pierLen = 34;
+                const pierW = 6.2;
+                const deck = new THREE.Mesh(new THREE.BoxGeometry(pierW, 0.28, pierLen), woodLightMat);
+                deck.position.set(0, 0, pierLen * 0.5);
+                deck.castShadow = true;
+                deck.receiveShadow = true;
+                group.add(deck);
+
+                for (let pz = 0; pz <= pierLen; pz += 4.5) {
+                    for (let px of [-pierW * 0.43, pierW * 0.43]) {
+                        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 4.8, 8), woodDarkMat);
+                        post.position.set(px, -1.7, pz);
+                        post.castShadow = true;
+                        group.add(post);
+                    }
+                }
+                scene.add(group);
+
+                ramps.push({
+                    x,
+                    z: z + pierLen * 0.5,
+                    baseY: deckElevation + 0.12,
+                    width: pierW,
+                    length: pierLen,
+                    halfW: pierW * 0.52,
+                    halfL: pierLen * 0.5,
+                    height: 0.0,
+                    slopeTan: 0.0,
+                    cos: 1,
+                    sin: 0,
+                    isPier: true
+                });
+            }
+            createCoastalPier(4.0, 74.0);
+
+            // =========================================================================
+            // 8. 280+ OBJEK FISIKA YANG BISA DITABRAK (TERMASUK PAGAR KAYU & PAYUNG PANTAI)
+            // =========================================================================
+            const physicsProps = [];
+
+            const crateGeo = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+            const barrelGeo = new THREE.CylinderGeometry(0.42, 0.42, 1.22, 12);
+            const coneGeo = new THREE.ConeGeometry(0.32, 0.82, 10);
+            const looseTireGeo = new THREE.TorusGeometry(0.4, 0.18, 8, 12);
+            looseTireGeo.rotateX(Math.PI / 2);
+            const tumbleweedGeo = new THREE.IcosahedronGeometry(0.65, 1);
+            const beachBallGeo = new THREE.SphereGeometry(0.62, 14, 14);
+
+            function spawnPhysicsProp(type, x, z, yOffset = 0, rotY = 0, scale = 1.0) {
+                let mesh, radius, halfH, mass, bounciness;
+
+                if (type === 'crate') {
+                    mesh = new THREE.Mesh(crateGeo, crateMat);
+                    radius = 0.65;
+                    halfH = 0.48;
+                    mass = 1.0;
+                    bounciness = 0.28;
+                } else if (type.startsWith('barrel')) {
+                    const mat = type === 'barrel_red' ? barrelRedMat : (type === 'barrel_blue' ? barrelBlueMat : barrelYellowMat);
+                    mesh = new THREE.Mesh(barrelGeo, mat);
+                    radius = 0.48;
+                    halfH = 0.61;
+                    mass = 1.25;
+                    bounciness = 0.32;
+                } else if (type === 'cone') {
+                    mesh = new THREE.Mesh(coneGeo, coneMat);
+                    radius = 0.35;
+                    halfH = 0.41;
+                    mass = 0.35;
+                    bounciness = 0.45;
+                } else if (type === 'tire') {
+                    mesh = new THREE.Mesh(looseTireGeo, tireMat);
+                    radius = 0.45;
+                    halfH = 0.2;
+                    mass = 0.65;
+                    bounciness = 0.55;
+                } else if (type === 'ball') {
+                    const ballMat = (Math.abs(Math.round(x + z)) % 2 === 0) ? lighthouseRedMat : barrelYellowMat;
+                    mesh = new THREE.Mesh(beachBallGeo, ballMat);
+                    radius = 0.62;
+                    halfH = 0.62;
+                    mass = 0.3;
+                    bounciness = 0.78;
+                } else if (type === 'cactus') {
+                    // Kaktus Saguaro yang bisa runtuh / tumbang dan terpental saat ditabrak mobil!
+                    mesh = new THREE.Group();
+                    const trunkH = 2.9 * scale;
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24 * scale, 0.3 * scale, trunkH, 7), cactusMat);
+                    mesh.add(trunk);
+
+                    for (let side of [-1, 1]) {
+                        if (side === 1 && seededRandom() < 0.22) continue;
+                        const armH = (1.1 + seededRandom() * 0.6) * scale;
+                        const armY = (-0.25 + seededRandom() * 0.55) * scale;
+                        const hBar = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * scale, 0.17 * scale, 0.6 * scale, 6), cactusMat);
+                        hBar.rotation.z = Math.PI * 0.5;
+                        hBar.position.set(side * 0.36 * scale, armY, 0);
+                        mesh.add(hBar);
+
+                        const vBar = new THREE.Mesh(new THREE.CylinderGeometry(0.17 * scale, 0.19 * scale, armH, 6), cactusMat);
+                        vBar.position.set(side * 0.64 * scale, armY + armH * 0.5 - 0.08, 0);
+                        mesh.add(vBar);
+                    }
+                    radius = 0.62 * scale;
+                    halfH = 1.45 * scale;
+                    mass = 0.65;
+                    bounciness = 0.35;
+                } else if (type === 'joshua') {
+                    // Pohon Gurun Joshua yang juga bisa tumbang / runtuh saat ditabrak!
+                    mesh = new THREE.Group();
+                    const trunkH = 2.5 * scale;
+                    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * scale, 0.28 * scale, trunkH, 6), woodDarkMat);
+                    mesh.add(trunk);
+
+                    for (let b = 0; b < 4; b++) {
+                        const ang = (b / 4) * Math.PI * 2 + 0.3;
+                        const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.11 * scale, 0.16 * scale, 1.35 * scale, 5), woodDarkMat);
+                        branch.position.set(Math.cos(ang) * 0.5 * scale, 0.95 * scale, Math.sin(ang) * 0.5 * scale);
+                        branch.rotation.z = -Math.cos(ang) * 0.55;
+                        branch.rotation.x = Math.sin(ang) * 0.55;
+                        mesh.add(branch);
+
+                        const tuft = new THREE.Mesh(new THREE.DodecahedronGeometry(0.48 * scale, 0), palmLeafMat);
+                        tuft.position.set(Math.cos(ang) * 0.85 * scale, 1.42 * scale, Math.sin(ang) * 0.85 * scale);
+                        mesh.add(tuft);
+                    }
+                    radius = 0.68 * scale;
+                    halfH = 1.25 * scale;
+                    mass = 0.72;
+                    bounciness = 0.32;
+                } else if (type === 'fence') {
+                    mesh = new THREE.Group();
+                    const postL = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.25, 0.16), woodDarkMat);
+                    postL.position.set(-0.95, 0, 0);
+                    const postR = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.25, 0.16), woodDarkMat);
+                    postR.position.set(0.95, 0, 0);
+                    const rail1 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.13, 0.08), woodLightMat);
+                    rail1.position.set(0, 0.32, 0);
+                    const rail2 = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.13, 0.08), woodLightMat);
+                    rail2.position.set(0, -0.12, 0);
+                    mesh.add(postL, postR, rail1, rail2);
+                    radius = 1.05;
+                    halfH = 0.62;
+                    mass = 0.55;
+                    bounciness = 0.3;
+                } else if (type === 'umbrella') {
+                    // Payung Pantai Warna-Warni yang bisa ditabrak mental!
+                    mesh = new THREE.Group();
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 2.2, 6), whitePaintMat);
+                    const capMat = (Math.abs(Math.round(x)) % 2 === 0) ? lighthouseRedMat : barrelBlueMat;
+                    const canopy = new THREE.Mesh(new THREE.ConeGeometry(1.45, 0.65, 8), capMat);
+                    canopy.position.y = 0.95;
+                    mesh.add(pole, canopy);
+                    radius = 0.95;
+                    halfH = 1.1;
+                    mass = 0.45;
+                    bounciness = 0.42;
+                } else if (type === 'sign') {
+                    // Rambu Jalan Raya Gurun yang bisa ditabrak
+                    mesh = new THREE.Group();
+                    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.1, 6), metalTrussMat);
+                    const diamond = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.68, 0.06), barrelYellowMat);
+                    diamond.position.y = 0.72;
+                    diamond.rotation.z = Math.PI * 0.25;
+                    mesh.add(pole, diamond);
+                    radius = 0.45;
+                    halfH = 1.05;
+                    mass = 0.4;
+                    bounciness = 0.38;
+                } else if (type === 'tumbleweed') {
+                    mesh = new THREE.Mesh(tumbleweedGeo, new THREE.MeshStandardMaterial({
+                        color: 0x7a5634,
+                        wireframe: true
+                    }));
+                    radius = 0.65;
+                    halfH = 0.65;
+                    mass = 0.25;
+                    bounciness = 0.65;
+                }
+
+                mesh.traverse(child => {
+                    if (child.isMesh) {
+                        child.castShadow = true;
+                        child.receiveShadow = true;
+                    }
+                });
+
+                const groundY = getTerrainHeight(x, z);
+                const startY = groundY + halfH + yOffset;
+                mesh.position.set(x, startY, z);
+                mesh.rotation.y = rotY;
+                scene.add(mesh);
+
+                physicsProps.push({
+                    type,
+                    mesh,
+                    initX: x,
+                    initY: startY,
+                    initZ: z,
+                    initRotY: rotY,
+                    x,
+                    y: startY,
+                    z,
+                    vx: type === 'tumbleweed' ? (1.8 + seededRandom() * 2.0) : 0,
+                    vy: 0,
+                    vz: type === 'tumbleweed' ? (seededRandom() - 0.5) * 1.5 : 0,
+                    avx: 0,
+                    avy: 0,
+                    avz: 0,
+                    radius,
+                    halfH,
+                    mass,
+                    bounciness,
+                    isTumbleweed: type === 'tumbleweed',
+                    sleeping: type !== 'tumbleweed'
+                });
+            }
+
+            // 1) PAGAR KAYU DI SEBELAH KANAN GUBUK & JALAN TANAH (Persis video 00:01 - 00:06!)
+            spawnPhysicsProp('fence', -3.6, -0.8, 0, 0.35);
+            spawnPhysicsProp('fence', -1.5, -1.6, 0, 0.35);
+            spawnPhysicsProp('fence', 0.6, -2.4, 0, 0.35);
+            spawnPhysicsProp('fence', 16.5, -21.0, 0, -0.4);
+            spawnPhysicsProp('fence', 18.4, -22.2, 0, -0.4);
+            spawnPhysicsProp('fence', 20.3, -23.4, 0, -0.4);
+
+            // Deretan Pagar Kayu Rapuh di Desa Barat, Pom Bensin, Oasis & Kanyon
+            for (let i = 0; i < 6; i++) {
+                spawnPhysicsProp('fence', -32.0 - i * 2.2, -11.5 + i * 0.5, 0, 0.25);
+                spawnPhysicsProp('fence', 22.0 + i * 2.2, -9.5 - i * 0.4, 0, -0.2);
+                spawnPhysicsProp('fence', -36.0 + i * 2.2, 24.0 + i * 0.8, 0, 0.35);
+            }
+
+            // 2) Tumpukan Peti Kayu & Drum Minyak di 12 Lokasi Strategis Seluruh Pulau
+            const propClusters = [
+                { cx: -4.2, cz: 13.5 },
+                { cx: 14.5, cz: -4.0 },
+                { cx: -16.5, cz: 14.0 },
+                { cx: 4.0, cz: 86.0 },
+                { cx: -42.0, cz: -14.0 },
+                { cx: -50.0, cz: -7.5 },
+                { cx: 36.0, cz: 2.5 },
+                { cx: 44.0, cz: 11.0 },
+                { cx: 26.0, cz: 38.0 },
+                { cx: -28.0, cz: 38.0 },
+                { cx: -56.0, cz: -18.0 },
+                { cx: 56.0, cz: 18.0 }
+            ];
+            propClusters.forEach(cl => {
+                if (cl.cx === undefined) return;
+                for (let row = 0; row < 3; row++) {
+                    spawnPhysicsProp('crate', cl.cx + (row - 1) * 1.05, cl.cz, 0, seededRandom());
+                }
+                for (let row = 0; row < 2; row++) {
+                    spawnPhysicsProp('crate', cl.cx + (row - 0.5) * 1.05, cl.cz, 1.0, seededRandom());
+                }
+                spawnPhysicsProp('barrel_red', cl.cx - 2.2, cl.cz + 0.6, 0);
+                spawnPhysicsProp('barrel_blue', cl.cx + 2.2, cl.cz + 0.6, 0);
+                spawnPhysicsProp('barrel_yellow', cl.cx + 2.5, cl.cz - 0.5, 0);
+                spawnPhysicsProp('tire', cl.cx - 2.6, cl.cz - 0.6, 0);
+            });
+
+            // 3) Rambu Jalan, Kerucut Jalan & Payung Pantai di Pesisir
+            for (let i = 0; i < 16; i++) {
+                spawnPhysicsProp('cone', 4.5 + i * 1.6, 8.5 - i * 1.1, 0);
+                spawnPhysicsProp('cone', -26.0 - i * 1.8, -4.0 - i * 0.6, 0);
+            }
+            const signLocations = [
+                [8.5, -6.5, 0.3], [-14.0, -10.5, -0.4], [24.0, 1.5, 0.5],
+                [-28.0, 18.0, 0.8], [16.0, 36.0, -0.3], [-42.0, -22.0, 0.2],
+                [2.0, 66.0, 0.0], [38.0, -14.0, -0.6]
+            ];
+            signLocations.forEach(([sx, sz, sr]) => spawnPhysicsProp('sign', sx, sz, 0, sr));
+
+            const umbrellaLocations = [
+                [-12.0, 73.0], [-19.5, 74.5], [19.0, 76.5], [27.5, 75.0],
+                [-60.0, 58.0], [-67.0, 53.0], [-42.0, 34.0], [-36.0, 29.0]
+            ];
+            umbrellaLocations.forEach(([ux, uz]) => spawnPhysicsProp('umbrella', ux, uz, 0, seededRandom() * Math.PI));
+
+            // 4) 30 Tumbleweed Menggelinding Tertiup Angin Gurun
+            for (let i = 0; i < 30; i++) {
+                const tx = (seededRandom() - 0.5) * 165;
+                const tz = (seededRandom() - 0.5) * 165;
+                if (getCoastlineSignedDistance(tx, tz) < -12) {
+                    spawnPhysicsProp('tumbleweed', tx, tz, 0.2);
+                }
+            }
+
+            // 5) Spawn Seluruh Kaktus Saguaro, Pohon Joshua & Bola Pantai sebagai Objek Fisika yang Bisa Runtuh / Mental!
+            smashableCactusQueue.forEach(item => {
+                spawnPhysicsProp(item.type, item.x, item.z, 0, item.rotY, item.scale);
+            });
+
+            const ballLocations = [
+                [-14.0, 72.0], [21.0, 74.5], [-42.0, 31.0], [-52.0, 24.0],
+                [6.0, -39.0], [18.0, -29.0], [-8.0, 6.0], [12.0, 3.0]
+            ];
+            ballLocations.forEach(([bx, bz]) => spawnPhysicsProp('ball', bx, bz, 0.1));
+
+            // =========================================================================
+            // 9. MODEL MOBIL RALLY DRIFT PUTIH (DENGAN SPOILER HITAM & SUSPENSI 4 RODA)
+            // =========================================================================
+            const carRoot = new THREE.Group();
+            scene.add(carRoot);
+
+            const carBodyTilt = new THREE.Group();
+            carRoot.add(carBodyTilt);
+
+            const chassisMesh = new THREE.Mesh(new THREE.BoxGeometry(2.06, 0.66, 4.48), carWhiteMat);
+            chassisMesh.position.set(0, 0.64, 0);
+            chassisMesh.castShadow = true;
+            chassisMesh.receiveShadow = true;
+            carBodyTilt.add(chassisMesh);
+
+            const cabinGeo = new THREE.BoxGeometry(1.72, 0.56, 2.15);
+            const cPos = cabinGeo.attributes.position;
+            for (let i = 0; i < cPos.count; i++) {
+                if (cPos.getY(i) > 0) {
+                    cPos.setX(i, cPos.getX(i) * 0.84);
+                    cPos.setZ(i, cPos.getZ(i) * 0.78 + 0.12);
+                }
+            }
+            cabinGeo.computeVertexNormals();
+            const cabinMesh = new THREE.Mesh(cabinGeo, carWhiteMat);
+            cabinMesh.position.set(0, 1.22, -0.12);
+            cabinMesh.castShadow = true;
+            cabinMesh.receiveShadow = true;
+            carBodyTilt.add(cabinMesh);
+
+            const windshield = new THREE.Mesh(new THREE.BoxGeometry(1.52, 0.44, 0.1), carGlassMat);
+            windshield.position.set(0, 1.2, -1.04);
+            windshield.rotation.x = 0.36;
+            carBodyTilt.add(windshield);
+
+            const rearWindow = new THREE.Mesh(new THREE.BoxGeometry(1.48, 0.42, 0.1), carGlassMat);
+            rearWindow.position.set(0, 1.2, 0.88);
+            rearWindow.rotation.x = -0.38;
+            carBodyTilt.add(rearWindow);
+
+            const sideWindows = new THREE.Mesh(new THREE.BoxGeometry(1.75, 0.38, 1.55), carGlassMat);
+            sideWindows.position.set(0, 1.21, -0.08);
+            carBodyTilt.add(sideWindows);
+
+            const hoodVent = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.08, 0.72), carBlackMat);
+            hoodVent.position.set(0, 0.98, -1.45);
+            carBodyTilt.add(hoodVent);
+
+            const frontBumper = new THREE.Mesh(new THREE.BoxGeometry(2.14, 0.24, 0.45), carBlackMat);
+            frontBumper.position.set(0, 0.36, -2.18);
+            carBodyTilt.add(frontBumper);
+
+            const rearDiffuser = new THREE.Mesh(new THREE.BoxGeometry(2.1, 0.24, 0.38), carBlackMat);
+            rearDiffuser.position.set(0, 0.38, 2.15);
+            carBodyTilt.add(rearDiffuser);
+
+            // Spoiler Belakang Hitam
+            for (let sx of [-0.62, 0.62]) {
+                const strut = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.36, 0.28), carBlackMat);
+                strut.position.set(sx, 1.1, 1.98);
+                strut.castShadow = true;
+                carBodyTilt.add(strut);
+            }
+            const spoilerWing = new THREE.Mesh(new THREE.BoxGeometry(2.12, 0.1, 0.44), carBlackMat);
+            spoilerWing.position.set(0, 1.28, 2.04);
+            spoilerWing.rotation.x = 0.14;
+            spoilerWing.castShadow = true;
+            carBodyTilt.add(spoilerWing);
+
+            for (let lx of [-0.68, 0.68]) {
+                const hl = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.18, 0.1), headLightMat);
+                hl.position.set(lx, 0.68, -2.25);
+                carBodyTilt.add(hl);
+            }
+
+            const tailBar = new THREE.Mesh(new THREE.BoxGeometry(1.78, 0.22, 0.1), tailLightMat);
+            tailBar.position.set(0, 0.68, 2.25);
+            carBodyTilt.add(tailBar);
+
+            const boostFlames = [];
+            for (let side of [-0.52, 0.52]) {
+                const flameGeo = new THREE.ConeGeometry(0.14, 0.85, 8);
+                flameGeo.rotateX(Math.PI / 2);
+                const flame = new THREE.Mesh(flameGeo, boostFlameMat);
+                flame.position.set(side, 0.36, 2.65);
+                flame.visible = false;
+                carBodyTilt.add(flame);
+                boostFlames.push(flame);
+            }
+
+            const wheels = [];
+            const wheelOffsets = [
+                { x: -1.04, y: 0.42, z: -1.38, isFront: true },
+                { x: 1.04, y: 0.42, z: -1.38, isFront: true },
+                { x: -1.06, y: 0.42, z: 1.38, isFront: false },
+                { x: 1.06, y: 0.42, z: 1.38, isFront: false }
+            ];
+
+            wheelOffsets.forEach(w => {
+                const steerPivot = new THREE.Group();
+                steerPivot.position.set(w.x, w.y, w.z);
+                carRoot.add(steerPivot);
+
+                const wheelMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 0.38, 16), tireMat);
+                wheelMesh.rotation.z = Math.PI / 2;
+                wheelMesh.castShadow = true;
+                steerPivot.add(wheelMesh);
+
+                const rimMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.4, 10), barrierMat);
+                rimMesh.rotation.z = Math.PI / 2;
+                steerPivot.add(rimMesh);
+
+                wheels.push({ steerPivot, wheelMesh, isFront: w.isFront, localX: w.x, localZ: w.z });
+            });
+
+            // =========================================================================
+            // 10. JEJAK 4 BAN TANAH BERALUR TIMBUL (RECESSED 4-WHEEL SAND TRACKS 00:18 - 00:38)
+            // =========================================================================
+            // Membuat tekstur alur jejak ban cekung dengan tepi pasir terangkat terang (persis seperti 00:31 - 00:37!)
+            function createRecessedTireTrackTexture() {
+                const c = document.createElement('canvas');
+                c.width = 64;
+                c.height = 64;
+                const ctx = c.getContext('2d');
+                ctx.clearRect(0, 0, 64, 64);
+
+                // Tepi gundukan pasir terang di sisi kiri & kanan alur ban
+                ctx.fillStyle = 'rgba(255, 236, 198, 0.65)';
+                ctx.fillRect(4, 0, 8, 64);
+                ctx.fillRect(52, 0, 8, 64);
+
+                // Alur cekung gelap di tengah jejak ban
+                const grad = ctx.createLinearGradient(12, 0, 52, 0);
+                grad.addColorStop(0, 'rgba(138, 92, 46, 0.85)');
+                grad.addColorStop(0.5, 'rgba(116, 74, 34, 0.95)');
+                grad.addColorStop(1, 'rgba(138, 92, 46, 0.85)');
+                ctx.fillStyle = grad;
+                ctx.fillRect(12, 0, 40, 64);
+
+                // Garis-garis batik tapak ban reli
+                ctx.fillStyle = 'rgba(92, 56, 22, 0.45)';
+                for (let y = 0; y < 64; y += 16) {
+                    ctx.fillRect(14, y, 36, 5);
+                }
+
+                const tex = new THREE.CanvasTexture(c);
+                tex.wrapS = THREE.ClampToEdgeWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                return tex;
+            }
+
+            const MAX_SKID_MARKS = 2200;
+            const skidGeo = new THREE.PlaneGeometry(0.46, 0.72);
+            skidGeo.rotateX(-Math.PI / 2);
+            const skidMat = new THREE.MeshBasicMaterial({
+                map: createRecessedTireTrackTexture(),
+                transparent: true,
+                opacity: 0.78,
+                depthWrite: false
+            });
+            const skidInstanced = new THREE.InstancedMesh(skidGeo, skidMat, MAX_SKID_MARKS);
+            skidInstanced.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            scene.add(skidInstanced);
+
+            let skidIndex = 0;
+            const tempSkidMat = new THREE.Matrix4();
+            const tempSkidPos = new THREE.Vector3();
+            const tempSkidQuat = new THREE.Quaternion();
+            const tempSkidScale = new THREE.Vector3(1, 1, 1);
+
+            for (let i = 0; i < MAX_SKID_MARKS; i++) {
+                tempSkidMat.makeScale(0, 0, 0);
+                skidInstanced.setMatrixAt(i, tempSkidMat);
+            }
+            skidInstanced.instanceMatrix.needsUpdate = true;
+
+            // Simpan posisi terakhir ke-4 roda agar jejak ban selalu menyambung mulus tanpa putus
+            const lastWheelTrackPos = [
+                new THREE.Vector3(),
+                new THREE.Vector3(),
+                new THREE.Vector3(),
+                new THREE.Vector3()
+            ];
+            let wheelTrackInitialized = false;
+
+            function addRecessedTireSegment(x0, z0, x1, z1) {
+                const dx = x1 - x0;
+                const dz = z1 - z0;
+                const segLen = Math.hypot(dx, dz);
+                if (segLen < 0.05 || segLen > 3.5) return;
+
+                const midX = (x0 + x1) * 0.5;
+                const midZ = (z0 + z1) * 0.5;
+                const y = getTerrainHeight(midX, midZ) + 0.035;
+                // Jangan gambar jejak ban jika di dalam air laut dalam
+                if (y < WATER_LEVEL - 0.02) return;
+
+                const normal = getTerrainNormal(midX, midZ);
+                const heading = Math.atan2(dx, dz);
+
+                tempSkidPos.set(midX, y, midZ);
+                const alignQuat = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+                const rotQuat = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), heading);
+                tempSkidQuat.copy(alignQuat).multiply(rotQuat);
+                tempSkidScale.set(1.0, 1.0, (segLen + 0.18) / 0.72);
+
+                tempSkidMat.compose(tempSkidPos, tempSkidQuat, tempSkidScale);
+                skidInstanced.setMatrixAt(skidIndex, tempSkidMat);
+                skidIndex = (skidIndex + 1) % MAX_SKID_MARKS;
+                skidInstanced.instanceMatrix.needsUpdate = true;
+            }
+
+            // Tambahkan jejak ban awal di jalan tanah menuju pantai Utara-Timur (seperti di detik 00:00 - 00:05)
+            for (let z = 4.0; z >= -36.0; z -= 0.55) {
+                const nextZ = z - 0.55;
+                const cx0 = -2.5 + Math.sin((z - 2.0) * 0.085) * 7.5 - z * 0.22;
+                const cx1 = -2.5 + Math.sin((nextZ - 2.0) * 0.085) * 7.5 - nextZ * 0.22;
+                addRecessedTireSegment(cx0 - 1.02, z, cx1 - 1.02, nextZ);
+                addRecessedTireSegment(cx0 + 1.02, z, cx1 + 1.02, nextZ);
+            }
+
+            // --- PARTIKEL KEPULAN DEBU PASIR TEBAL & CIPRATAN BUIH AIR PANTAI ---
+            const MAX_DUST_PARTICLES = 380;
+            const dustGeo = new THREE.DodecahedronGeometry(0.55, 1);
+            const dustParticles = [];
+
+            for (let i = 0; i < MAX_DUST_PARTICLES; i++) {
+                const mat = new THREE.MeshLambertMaterial({
+                    color: 0xedd0a4,
+                    transparent: true,
+                    opacity: 0,
+                    depthWrite: false
+                });
+                const mesh = new THREE.Mesh(dustGeo, mat);
+                mesh.visible = false;
+                scene.add(mesh);
+
+                dustParticles.push({
+                    mesh,
+                    active: false,
+                    age: 0,
+                    maxAge: 1.0,
+                    vx: 0,
+                    vy: 0,
+                    vz: 0,
+                    startScale: 0.5,
+                    endScale: 3.5,
+                    maxOpacity: 0.45
+                });
+            }
+
+            let dustPoolIdx = 0;
+            function spawnDustPuff(x, y, z, vx, vy, vz, scaleStart, scaleEnd, life, opacity, isWaterSplash = false) {
+                const p = dustParticles[dustPoolIdx];
+                dustPoolIdx = (dustPoolIdx + 1) % MAX_DUST_PARTICLES;
+
+                p.active = true;
+                p.age = 0;
+                p.maxAge = life;
+                p.vx = vx;
+                p.vy = vy;
+                p.vz = vz;
+                p.startScale = scaleStart;
+                p.endScale = scaleEnd;
+                p.maxOpacity = opacity;
+
+                p.mesh.material.color.setHex(isWaterSplash ? 0xf5fffd : 0xedd0a4);
+                p.mesh.position.set(x, y, z);
+                p.mesh.scale.setScalar(scaleStart);
+                p.mesh.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+                p.mesh.material.opacity = opacity;
+                p.mesh.visible = true;
+            }
+
+            // =========================================================================
+            // 11. AUDIO PROSEDURAL LENGKAP (MESIN RELI, DRIFT PASIR, OMBAK LAUT & BURUNG CAMAR)
+            // =========================================================================
+            let audioCtx = null;
+            let engineOsc = null;
+            let engineGain = null;
+            let skidGain = null;
+            let surfNoiseGain = null;
+            let lastSquawkTime = 0;
+
+            function initAudio() {
+                if (audioCtx) return;
+                try {
+                    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+                    audioCtx = new AudioContextClass();
+
+                    // Raungan mesin reli (Sawtooth + Lowpass Filter)
+                    engineOsc = audioCtx.createOscillator();
+                    engineOsc.type = 'sawtooth';
+                    engineOsc.frequency.value = 58;
+
+                    const engineFilter = audioCtx.createBiquadFilter();
+                    engineFilter.type = 'lowpass';
+                    engineFilter.frequency.value = 260;
+
+                    engineGain = audioCtx.createGain();
+                    engineGain.gain.value = 0.04;
+
+                    engineOsc.connect(engineFilter);
+                    engineFilter.connect(engineGain);
+                    engineGain.connect(audioCtx.destination);
+                    engineOsc.start();
+
+                    // Buffer White Noise untuk desisan pasir & deburan ombak pantai
+                    const bufferSize = audioCtx.sampleRate * 2;
+                    const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                    const output = noiseBuffer.getChannelData(0);
+                    for (let i = 0; i < bufferSize; i++) {
+                        output[i] = Math.random() * 2 - 1;
+                    }
+
+                    // 1) Suara gesekan ban di pasir
+                    const whiteNoise = audioCtx.createBufferSource();
+                    whiteNoise.buffer = noiseBuffer;
+                    whiteNoise.loop = true;
+
+                    const bandpass = audioCtx.createBiquadFilter();
+                    bandpass.type = 'bandpass';
+                    bandpass.frequency.value = 750;
+                    bandpass.Q.value = 1.2;
+
+                    skidGain = audioCtx.createGain();
+                    skidGain.gain.value = 0.0;
+
+                    whiteNoise.connect(bandpass);
+                    bandpass.connect(skidGain);
+                    skidGain.connect(audioCtx.destination);
+                    whiteNoise.start();
+
+                    // 2) Suara ambient deburan ombak pantai (terdengar saat mendekati pantai)
+                    const surfSource = audioCtx.createBufferSource();
+                    surfSource.buffer = noiseBuffer;
+                    surfSource.loop = true;
+
+                    const surfFilter = audioCtx.createBiquadFilter();
+                    surfFilter.type = 'lowpass';
+                    surfFilter.frequency.value = 420;
+
+                    surfNoiseGain = audioCtx.createGain();
+                    surfNoiseGain.gain.value = 0.0;
+
+                    surfSource.connect(surfFilter);
+                    surfFilter.connect(surfNoiseGain);
+                    surfNoiseGain.connect(audioCtx.destination);
+                    surfSource.start();
+                } catch (e) {
+                    // Audio tetap aman jika diblokir browser
+                }
+            }
+
+            // Suara pekikan burung camar (Seagull Cry seperti di detik 00:15 - 00:40!)
+            function playSeagullCry() {
+                if (!audioCtx) return;
+                const now = audioCtx.currentTime;
+                if (now - lastSquawkTime < 0.38) return;
+                lastSquawkTime = now;
+
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const filter = audioCtx.createBiquadFilter();
+                    const g = audioCtx.createGain();
+
+                    osc.type = 'triangle';
+                    // Karakteristik nada burung camar: naik cepat ke ~2100Hz lalu melengkung turun ke ~1150Hz
+                    const pitchBase = 1750 + Math.random() * 380;
+                    osc.frequency.setValueAtTime(pitchBase * 0.78, now);
+                    osc.frequency.linearRampToValueAtTime(pitchBase, now + 0.07);
+                    osc.frequency.exponentialRampToValueAtTime(pitchBase * 0.56, now + 0.38);
+
+                    filter.type = 'bandpass';
+                    filter.frequency.value = 1900;
+                    filter.Q.value = 3.2;
+
+                    g.gain.setValueAtTime(0.001, now);
+                    g.gain.linearRampToValueAtTime(0.065, now + 0.05);
+                    g.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+                    osc.connect(filter);
+                    filter.connect(g);
+                    g.connect(audioCtx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.42);
+                } catch (e) {}
+            }
+
+            function playImpactSound(intensity = 0.5, isMetal = false) {
+                if (!audioCtx) return;
+                try {
+                    const osc = audioCtx.createOscillator();
+                    const g = audioCtx.createGain();
+                    osc.type = isMetal ? 'triangle' : 'sine';
+                    osc.frequency.setValueAtTime(isMetal ? 210 : 105, audioCtx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(32, audioCtx.currentTime + 0.16);
+                    g.gain.setValueAtTime(Math.min(0.18, intensity * 0.12), audioCtx.currentTime);
+                    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.17);
+                    osc.connect(g);
+                    g.connect(audioCtx.destination);
+                    osc.start();
+                    osc.stop(audioCtx.currentTime + 0.18);
+                } catch (e) {}
+            }
+
+            // =========================================================================
+            // 12. FISIKA MOBIL (SUSPENSI 4 RODA, DRIFT PASIR & TABRAKAN MULUS)
+            // =========================================================================
+            const WHEEL_BASE = 2.76;
+            const TRACK_WIDTH = 2.08;
+
+            const carState = {
+                x: 1.8,
+                z: 2.2,
+                y: 0,
+                vy: 0,
+                isGrounded: true,
+                vx: -7.5,
+                vz: -4.2,
+                heading: 0.95, // Menghadap kiri-atas ke arah gubuk & pagar kayu seperti awal video 00:00
+                angularVel: 0.18,
+                steerAngle: 0,
+                wheelSpin: 0,
+                pitch: 0,
+                roll: 0,
+                suspensionOffset: 0,
+                suspensionVel: 0
+            };
+
+            function resetCarToVideoPose() {
+                carState.x = 1.8;
+                carState.z = 2.2;
+                carState.y = getTerrainHeight(carState.x, carState.z);
+                carState.vy = 0;
+                carState.isGrounded = true;
+                carState.vx = -7.5;
+                carState.vz = -4.2;
+                carState.heading = 0.95;
+                carState.angularVel = 0.15;
+                carState.steerAngle = 0.12;
+                carState.pitch = 0;
+                carState.roll = -0.05;
+                carState.suspensionOffset = 0;
+                carState.suspensionVel = 0;
+                wheelTrackInitialized = false;
+
+                // Kembalikan pagar kayu & peti yang sudah ditabrak ke posisi semula
+                for (let i = 0; i < physicsProps.length; i++) {
+                    const p = physicsProps[i];
+                    if (!p.isTumbleweed) {
+                        p.x = p.initX;
+                        p.y = p.initY;
+                        p.z = p.initZ;
+                        p.vx = 0;
+                        p.vy = 0;
+                        p.vz = 0;
+                        p.avx = 0;
+                        p.avy = 0;
+                        p.avz = 0;
+                        p.sleeping = true;
+                        p.mesh.position.set(p.x, p.y, p.z);
+                        p.mesh.rotation.set(0, p.initRotY || 0, 0);
+                    }
+                }
+            }
+
+            carState.y = getTerrainHeight(carState.x, carState.z);
+            for (let i = 0; i < 16; i++) {
+                spawnDustPuff(
+                    carState.x + 1.5 + i * 0.45,
+                    carState.y + 0.35,
+                    carState.z + 0.6 + i * 0.2,
+                    1.2, 0.7, 0.4,
+                    0.9, 3.8,
+                    1.2, 0.38, false
+                );
+            }
+
+            const keys = { w: false, a: false, s: false, d: false, space: false, shift: false };
+            const hudHint = document.getElementById('hud-hint');
+            const godotModal = document.getElementById('godot-modal');
+            let hudHidden = false;
+
+            function toggleGodotModal(forceClose = false) {
+                if (forceClose) {
+                    godotModal.classList.remove('active');
+                    document.body.classList.remove('modal-active');
+                    return;
+                }
+                const isActive = godotModal.classList.toggle('active');
+                document.body.classList.toggle('modal-active', isActive);
+            }
+
+            window.addEventListener('keydown', (e) => {
+                initAudio();
+                const code = e.code;
+
+                if (code === 'KeyG') {
+                    toggleGodotModal();
+                    return;
+                }
+                if (code === 'Escape') {
+                    toggleGodotModal(true);
+                    return;
+                }
+
+                if (code === 'KeyW' || code === 'ArrowUp') keys.w = true;
+                if (code === 'KeyS' || code === 'ArrowDown') keys.s = true;
+                if (code === 'KeyA' || code === 'ArrowLeft') keys.a = true;
+                if (code === 'KeyD' || code === 'ArrowRight') keys.d = true;
+                if (code === 'Space') keys.space = true;
+                if (code === 'ShiftLeft' || code === 'ShiftRight') keys.shift = true;
+                if (code === 'KeyR') resetCarToVideoPose();
+                if (code === 'KeyC') cameraMode = (cameraMode + 1) % 3;
+
+                if (!hudHidden && (keys.w || keys.a || keys.s || keys.d || keys.space)) {
+                    hudHidden = true;
+                    hudHint.classList.add('hidden-hud');
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                const code = e.code;
+                if (code === 'KeyW' || code === 'ArrowUp') keys.w = false;
+                if (code === 'KeyS' || code === 'ArrowDown') keys.s = false;
+                if (code === 'KeyA' || code === 'ArrowLeft') keys.a = false;
+                if (code === 'KeyD' || code === 'ArrowRight') keys.d = false;
+                if (code === 'Space') keys.space = false;
+                if (code === 'ShiftLeft' || code === 'ShiftRight') keys.shift = false;
+            });
+
+            document.getElementById('close-modal-btn').addEventListener('click', () => toggleGodotModal(true));
+            document.getElementById('copy-gdscript-btn').addEventListener('click', (e) => {
+                const text = document.getElementById('gdscript-content').innerText;
+                const ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand('copy');
+                document.body.removeChild(ta);
+                e.target.innerText = 'Tersalin!';
+                setTimeout(() => { e.target.innerText = 'Salin GDScript'; }, 1800);
+            });
+
+            // =========================================================================
+            // 13. MAIN GAME LOOP (60 FPS)
+            // =========================================================================
+            let lastTime = performance.now();
+
+            function animate(now) {
+                requestAnimationFrame(animate);
+
+                const dt = Math.min((now - lastTime) / 1000, 0.05);
+                lastTime = now;
+
+                // --- A. UPDATE FISIKA KENDARAAN ---
+                const throttleInput = (keys.w ? 1 : 0) - (keys.s ? 1 : 0);
+                const steerInput = (keys.a ? 1 : 0) - (keys.d ? 1 : 0);
+
+                const targetSteer = steerInput * 0.48;
+                carState.steerAngle += (targetSteer - carState.steerAngle) * Math.min(1, dt * 11);
+
+                const fwdX = -Math.sin(carState.heading);
+                const fwdZ = -Math.cos(carState.heading);
+                const rightX = Math.cos(carState.heading);
+                const rightZ = -Math.sin(carState.heading);
+
+                const forwardSpeed = carState.vx * fwdX + carState.vz * fwdZ;
+                const lateralSpeed = carState.vx * rightX + carState.vz * rightZ;
+
+                const boostMultiplier = keys.shift ? 1.55 : 1.0;
+                const accelForce = throttleInput >= 0 ? 31.0 * boostMultiplier : 20.0;
+                if (throttleInput !== 0 && carState.isGrounded) {
+                    carState.vx += fwdX * throttleInput * accelForce * dt;
+                    carState.vz += fwdZ * throttleInput * accelForce * dt;
+                }
+
+                // Grip Samping (Drift Pasir Halus & Responsif seperti di video 00:08 - 00:41)
+                const isHandbraking = keys.space;
+                const lateralGrip = carState.isGrounded ? (isHandbraking ? 1.25 : 3.45) : 0.2;
+                const gripImpulse = Math.min(1, lateralGrip * dt);
+                carState.vx -= rightX * lateralSpeed * gripImpulse;
+                carState.vz -= rightZ * lateralSpeed * gripImpulse;
+
+                // Cek apakah berada di air dangkal bibir pantai
+                const centerSurf = getSurfaceInfo(carState.x, carState.z);
+                const waterDepth = (!centerSurf.isPier && carState.y < WATER_LEVEL + 0.14)
+                    ? Math.max(0, WATER_LEVEL + 0.1 - carState.y)
+                    : 0;
+                const inWater = waterDepth > 0.02;
+
+                const waterDrag = inWater ? THREE.MathUtils.lerp(0.62, 0.25, Math.min(1, waterDepth / 1.0)) : 0.63;
+                const baseDrag = carState.isGrounded ? (keys.space ? 0.45 : waterDrag) : 0.92;
+                const dragFactor = Math.pow(baseDrag, dt);
+                carState.vx *= dragFactor;
+                carState.vz *= dragFactor;
+
+                const isBoosting = keys.shift && throttleInput > 0;
+                for (let b = 0; b < boostFlames.length; b++) {
+                    boostFlames[b].visible = isBoosting;
+                    if (isBoosting) {
+                        boostFlames[b].scale.set(1, 1, 0.75 + Math.random() * 0.55);
+                    }
+                }
+
+                const maxSpeed = keys.shift ? 38.0 : 29.0;
+                const newTotalSpeed = Math.hypot(carState.vx, carState.vz);
+                if (newTotalSpeed > maxSpeed) {
+                    carState.vx = (carState.vx / newTotalSpeed) * maxSpeed;
+                    carState.vz = (carState.vz / newTotalSpeed) * maxSpeed;
+                }
+
+                const speedFactor = THREE.MathUtils.clamp(newTotalSpeed / 4.2, 0, 1);
+                const reverseSign = forwardSpeed >= -0.5 ? 1 : -1;
+                const driftBoost = keys.space ? 1.36 : 1.12;
+                const turnAuthority = carState.isGrounded ? 1.0 : 0.2;
+                const targetAngularVel = steerInput * 2.5 * speedFactor * reverseSign * driftBoost * turnAuthority;
+
+                carState.angularVel += (targetAngularVel - carState.angularVel) * Math.min(1, dt * 8.5);
+                carState.heading += carState.angularVel * dt;
+
+                carState.x += carState.vx * dt;
+                carState.z += carState.vz * dt;
+
+                // --- A1. TEMBOK TRANSPARAN DI LAUT (INVISIBLE SEA BOUNDARY WALL) ---
+                const afterMoveSurf = getSurfaceInfo(carState.x, carState.z);
+                if (!afterMoveSurf.isPier && afterMoveSurf.height < SEA_BOUNDARY_DEPTH) {
+                    const eps = 1.0;
+                    const gx = getBaseTerrainHeight(carState.x + eps, carState.z) - getBaseTerrainHeight(carState.x - eps, carState.z);
+                    const gz = getBaseTerrainHeight(carState.x, carState.z + eps) - getBaseTerrainHeight(carState.x, carState.z - eps);
+                    const gLen = Math.hypot(gx, gz) || 1;
+                    const inlandNx = gx / gLen;
+                    const inlandNz = gz / gLen;
+
+                    const penDepth = (SEA_BOUNDARY_DEPTH - afterMoveSurf.height) * 3.8;
+                    carState.x += inlandNx * Math.min(2.2, penDepth);
+                    carState.z += inlandNz * Math.min(2.2, penDepth);
+
+                    const outwardVn = carState.vx * inlandNx + carState.vz * inlandNz;
+                    if (outwardVn < 0) {
+                        carState.vx -= 1.04 * outwardVn * inlandNx;
+                        carState.vz -= 1.04 * outwardVn * inlandNz;
+                        carState.vx *= 0.92;
+                        carState.vz *= 0.92;
+                    }
+                }
+
+                // --- A2. COLLISION OBB & SILINDER (TANPA PANTULAN BERLEBIHAN) ---
+                const carColRadius = 1.3;
+                const restitution = 0.1;
+
+                for (let i = 0; i < cylinderColliders.length; i++) {
+                    const col = cylinderColliders[i];
+                    if (carState.y > afterMoveSurf.height + col.height) continue;
+                    const dx = carState.x - col.x;
+                    const dz = carState.z - col.z;
+                    const dist = Math.hypot(dx, dz);
+                    const minDist = col.r + carColRadius;
+
+                    if (dist < minDist && dist > 0.0001) {
+                        const nx = dx / dist;
+                        const nz = dz / dist;
+                        const overlap = minDist - dist + 0.01;
+                        carState.x += nx * overlap;
+                        carState.z += nz * overlap;
+
+                        const vn = carState.vx * nx + carState.vz * nz;
+                        if (vn < 0) {
+                            carState.vx -= (1.0 + restitution) * vn * nx;
+                            carState.vz -= (1.0 + restitution) * vn * nz;
+                            carState.vx *= 0.88;
+                            carState.vz *= 0.88;
+                            if (Math.abs(vn) > 2.5) {
+                                playImpactSound(Math.min(1.0, Math.abs(vn) * 0.06), false);
+                            }
+                        }
+                    }
+                }
+
+                for (let i = 0; i < boxColliders.length; i++) {
+                    const box = boxColliders[i];
+                    if (carState.y > afterMoveSurf.height + box.height) continue;
+
+                    const dx = carState.x - box.x;
+                    const dz = carState.z - box.z;
+                    const localX = dx * box.cos - dz * box.sin;
+                    const localZ = dx * box.sin + dz * box.cos;
+
+                    const clampedX = THREE.MathUtils.clamp(localX, -box.halfW, box.halfW);
+                    const clampedZ = THREE.MathUtils.clamp(localZ, -box.halfL, box.halfL);
+                    const diffX = localX - clampedX;
+                    const diffZ = localZ - clampedZ;
+                    const distSq = diffX * diffX + diffZ * diffZ;
+
+                    if (distSq < carColRadius * carColRadius) {
+                        const dist = Math.sqrt(distSq);
+                        let localNx = 0, localNz = 0, overlap = 0;
+                        if (dist > 0.0001) {
+                            localNx = diffX / dist;
+                            localNz = diffZ / dist;
+                            overlap = carColRadius - dist + 0.01;
+                        } else {
+                            localNx = 1;
+                            overlap = carColRadius;
+                        }
+
+                        const nx = localNx * box.cos + localNz * box.sin;
+                        const nz = -localNx * box.sin + localNz * box.cos;
+                        carState.x += nx * overlap;
+                        carState.z += nz * overlap;
+
+                        const vn = carState.vx * nx + carState.vz * nz;
+                        if (vn < 0) {
+                            carState.vx -= (1.0 + restitution) * vn * nx;
+                            carState.vz -= (1.0 + restitution) * vn * nz;
+                            carState.vx *= 0.88;
+                            carState.vz *= 0.88;
+                            if (Math.abs(vn) > 2.5) {
+                                playImpactSound(Math.min(1.0, Math.abs(vn) * 0.06), true);
+                            }
+                        }
+                    }
+                }
+
+                // --- A3. SAMPLING 4 RODA & FISIKA LOMPATAN RAMP ---
+                const halfWB = WHEEL_BASE * 0.5;
+                const halfTW = TRACK_WIDTH * 0.5;
+
+                const flX = carState.x + fwdX * halfWB - rightX * halfTW;
+                const flZ = carState.z + fwdZ * halfWB - rightZ * halfTW;
+                const frX = carState.x + fwdX * halfWB + rightX * halfTW;
+                const frZ = carState.z + fwdZ * halfWB + rightZ * halfTW;
+                const rlX = carState.x - fwdX * halfWB - rightX * halfTW;
+                const rlZ = carState.z - fwdZ * halfWB - rightZ * halfTW;
+                const rrX = carState.x - fwdX * halfWB + rightX * halfTW;
+                const rrZ = carState.z - fwdZ * halfWB + rightZ * halfTW;
+
+                const hFL = getTerrainHeight(flX, flZ);
+                const hFR = getTerrainHeight(frX, frZ);
+                const hRL = getTerrainHeight(rlX, rlZ);
+                const hRR = getTerrainHeight(rrX, rrZ);
+
+                const frontAvgH = (hFL + hFR) * 0.5;
+                const rearAvgH = (hRL + hRR) * 0.5;
+                const leftAvgH = (hFL + hRL) * 0.5;
+                const rightAvgH = (hFR + hRR) * 0.5;
+                const fourWheelGroundY = (frontAvgH + rearAvgH) * 0.5;
+
+                const surfacePitchAngle = Math.atan2(frontAvgH - rearAvgH, WHEEL_BASE);
+                const surfaceRollAngle = Math.atan2(leftAvgH - rightAvgH, TRACK_WIDTH);
+
+                if (carState.isGrounded) {
+                    const targetClimbVy = forwardSpeed * Math.tan(surfacePitchAngle);
+                    const dropGap = carState.y - fourWheelGroundY;
+                    const maxGravityFollowDrop = 0.15 + Math.max(0, -carState.vy * dt);
+
+                    if (dropGap > maxGravityFollowDrop && (carState.vy > 1.2 || newTotalSpeed > 10.0)) {
+                        carState.isGrounded = false;
+                        carState.vy = Math.max(carState.vy, targetClimbVy);
+                    } else {
+                        carState.y = fourWheelGroundY;
+                        carState.vy = targetClimbVy;
+                    }
+                } else {
+                    carState.vy -= 21.0 * dt;
+                    carState.y += carState.vy * dt;
+
+                    if (carState.y <= fourWheelGroundY) {
+                        const impactVy = Math.abs(carState.vy);
+                        carState.y = fourWheelGroundY;
+                        carState.vy = forwardSpeed * Math.tan(surfacePitchAngle);
+                        carState.isGrounded = true;
+
+                        if (impactVy > 2.2) {
+                            carState.suspensionVel = -Math.min(6.0, impactVy * 0.4);
+                            playImpactSound(Math.min(1.0, impactVy * 0.05), false);
+                        }
+                    }
+                }
+
+                const springAccel = -65.0 * carState.suspensionOffset - 11.5 * carState.suspensionVel;
+                carState.suspensionVel += springAccel * dt;
+                carState.suspensionOffset = THREE.MathUtils.clamp(
+                    carState.suspensionOffset + carState.suspensionVel * dt,
+                    -0.25,
+                    0.22
+                );
+
+                // --- A4. TABRAKAN OBJEK DINAMIS (PAGAR KAYU, PETI, DRUM, TUMBLEWEED) ---
+                const carHitRadius = 1.55;
+                for (let i = 0; i < physicsProps.length; i++) {
+                    const p = physicsProps[i];
+                    const dx = p.x - carState.x;
+                    const dz = p.z - carState.z;
+                    const dy = p.y - (carState.y + 0.65);
+                    const distXZ = Math.hypot(dx, dz);
+                    const minDist = carHitRadius + p.radius;
+
+                    if (distXZ < minDist && Math.abs(dy) < 1.45) {
+                        p.sleeping = false;
+                        const nx = distXZ > 0.001 ? dx / distXZ : fwdX;
+                        const nz = distXZ > 0.001 ? dz / distXZ : fwdZ;
+                        const overlap = minDist - distXZ + 0.02;
+
+                        p.x += nx * overlap;
+                        p.z += nz * overlap;
+
+                        const transferSpeed = Math.min(16.0, Math.max(3.5, newTotalSpeed * 0.72));
+                        const invMass = 1.0 / Math.max(0.35, p.mass);
+                        p.vx = carState.vx * 0.55 + nx * transferSpeed * Math.min(1.4, invMass * 0.65) + (Math.random() - 0.5) * 1.8;
+                        p.vz = carState.vz * 0.55 + nz * transferSpeed * Math.min(1.4, invMass * 0.65) + (Math.random() - 0.5) * 1.8;
+                        p.vy = Math.min(5.0, 1.4 + transferSpeed * 0.16 * Math.min(1.3, invMass * 0.7));
+
+                        p.avx = (Math.random() - 0.5) * 7.5;
+                        p.avy = (Math.random() - 0.5) * 7.5;
+                        p.avz = (Math.random() - 0.5) * 7.5;
+
+                        carState.vx *= 0.985;
+                        carState.vz *= 0.985;
+
+                        playImpactSound(Math.min(0.9, transferSpeed * 0.06), p.type.startsWith('barrel'));
+                        spawnDustPuff(p.x, p.y, p.z, p.vx * 0.2, 1.0, p.vz * 0.2, 1.1, 3.8, 0.9, 0.4, false);
+                    }
+
+                    if (!p.sleeping) {
+                        if (p.isTumbleweed) {
+                            p.vx += (2.6 - p.vx) * 0.4 * dt;
+                            p.vz += (1.1 - p.vz) * 0.4 * dt;
+                            if (Math.hypot(p.x, p.z) > 120) {
+                                p.x = -p.x * 0.5;
+                                p.z = -p.z * 0.5;
+                            }
+                        }
+
+                        p.vy -= 21.0 * dt;
+                        p.vx *= Math.pow(0.82, dt);
+                        p.vz *= Math.pow(0.82, dt);
+
+                        p.x += p.vx * dt;
+                        p.y += p.vy * dt;
+                        p.z += p.vz * dt;
+
+                        p.mesh.rotation.x += p.avx * dt;
+                        p.mesh.rotation.y += p.avy * dt;
+                        p.mesh.rotation.z += p.avz * dt;
+
+                        const pGround = Math.max(getTerrainHeight(p.x, p.z), WATER_LEVEL - 0.2) + p.halfH;
+                        if (p.y <= pGround) {
+                            p.y = pGround;
+                            if (Math.abs(p.vy) > 1.6) {
+                                p.vy = -p.vy * (p.bounciness * 0.55);
+                                p.avx *= 0.6;
+                                p.avz *= 0.6;
+                            } else {
+                                p.vy = 0;
+                                if (!p.isTumbleweed) {
+                                    p.avx *= Math.pow(0.02, dt);
+                                    p.avy *= Math.pow(0.02, dt);
+                                    p.avz *= Math.pow(0.02, dt);
+                                }
+                            }
+                            const groundFriction = p.isTumbleweed ? 0.9 : 0.08;
+                            p.vx *= Math.pow(groundFriction, dt);
+                            p.vz *= Math.pow(groundFriction, dt);
+
+                            if (!p.isTumbleweed && Math.hypot(p.vx, p.vz) < 0.15 && Math.abs(p.vy) < 0.05) {
+                                p.sleeping = true;
+                            }
+                        }
+                        p.mesh.position.set(p.x, p.y, p.z);
+                    }
+                }
+
+                // --- A5. UPDATE BURUNG CAMAR INTERAKTIF (TERBANG MENGHINDAR & SUARA PEKIKAN) ---
+                for (let i = 0; i < seagulls.length; i++) {
+                    const g = seagulls[i];
+                    const distToCar = Math.hypot(g.x - carState.x, g.z - carState.z);
+
+                    if (g.state === 'resting') {
+                        // Sayap terlipat saat berdiri di pantai
+                        g.leftWingPivot.rotation.z = 0.18;
+                        g.rightWingPivot.rotation.z = -0.18;
+
+                        // Jika mobil mendekat dalam jarak 17 meter, burung camar kaget, berteriak, dan terbang!
+                        if (distToCar < 17.5) {
+                            g.state = 'takeoff';
+                            g.timer = 4.5 + Math.random() * 3.5;
+                            const awayAngle = Math.atan2(g.x - carState.x, g.z - carState.z) + (Math.random() - 0.5) * 0.7;
+                            g.heading = awayAngle + Math.PI;
+                            const flySpd = 9.5 + Math.random() * 4.5;
+                            g.vx = Math.sin(awayAngle) * flySpd;
+                            g.vz = Math.cos(awayAngle) * flySpd;
+                            g.vy = 3.6 + Math.random() * 2.2;
+                            playSeagullCry();
+                        }
+                    } else if (g.state === 'takeoff') {
+                        g.flapPhase += dt * 19.0;
+                        const flap = Math.sin(g.flapPhase) * 0.72;
+                        g.leftWingPivot.rotation.z = flap;
+                        g.rightWingPivot.rotation.z = -flap;
+
+                        g.x += g.vx * dt;
+                        g.y += g.vy * dt;
+                        g.z += g.vz * dt;
+                        g.vy = Math.max(0.4, g.vy - 0.85 * dt);
+
+                        g.timer -= dt;
+                        if (g.timer <= 0) {
+                            g.state = 'soaring';
+                            g.timer = 6.0 + Math.random() * 5.0;
+                        }
+                    } else if (g.state === 'soaring') {
+                        // Melayang melingkar di atas pantai sambil sesekali mengepakkan sayap
+                        g.flapPhase += dt * 7.5;
+                        const flap = Math.sin(g.flapPhase) * 0.25;
+                        g.leftWingPivot.rotation.z = flap;
+                        g.rightWingPivot.rotation.z = -flap;
+
+                        // Berbelok kembali menuju sekitar titik pantai asalnya
+                        const toHomeX = g.homeX - g.x;
+                        const toHomeZ = g.homeZ - g.z;
+                        g.vx += toHomeX * 0.18 * dt;
+                        g.vz += toHomeZ * 0.18 * dt;
+                        const spd = Math.hypot(g.vx, g.vz) || 1;
+                        const targetSpd = 7.2;
+                        g.vx = (g.vx / spd) * targetSpd;
+                        g.vz = (g.vz / spd) * targetSpd;
+
+                        g.x += g.vx * dt;
+                        g.z += g.vz * dt;
+
+                        const groundH = Math.max(WATER_LEVEL + 0.05, getBaseTerrainHeight(g.x, g.z));
+                        const targetY = groundH + 4.5 + Math.sin(now * 0.002 + i) * 1.2;
+                        g.y += (targetY - g.y) * dt * 1.5;
+
+                        g.heading = Math.atan2(-g.vx, -g.vz);
+                        g.timer -= dt;
+
+                        // Mendarat kembali jika mobil sudah menjauh
+                        if (g.timer <= 0 && distToCar > 26.0 && Math.hypot(toHomeX, toHomeZ) < 18.0) {
+                            g.state = 'landing';
+                        }
+                    } else if (g.state === 'landing') {
+                        g.flapPhase += dt * 14.0;
+                        const flap = Math.sin(g.flapPhase) * 0.48;
+                        g.leftWingPivot.rotation.z = flap;
+                        g.rightWingPivot.rotation.z = -flap;
+
+                        const groundH = Math.max(WATER_LEVEL + 0.05, getBaseTerrainHeight(g.x, g.z)) + 0.14;
+                        g.x += g.vx * 0.5 * dt;
+                        g.z += g.vz * 0.5 * dt;
+                        g.y -= 2.4 * dt;
+
+                        if (g.y <= groundH) {
+                            g.y = groundH;
+                            g.state = 'resting';
+                        }
+                    }
+
+                    g.root.position.set(g.x, g.y, g.z);
+                    g.root.rotation.y = g.heading;
+                }
+
+                // --- A6. ORIENTASI PITCH & ROLL MOBIL + RODA ---
+                if (carState.isGrounded) {
+                    const accelPitch = -throttleInput * 0.042;
+                    const cornerRoll = -carState.angularVel * 0.055 - lateralSpeed * 0.01;
+                    carState.pitch += (surfacePitchAngle + accelPitch - carState.pitch) * Math.min(1, dt * 12);
+                    carState.roll += (surfaceRollAngle + cornerRoll - carState.roll) * Math.min(1, dt * 12);
+                } else {
+                    carState.pitch = THREE.MathUtils.clamp(carState.pitch - 0.3 * dt, -0.35, 0.42);
+                    carState.roll *= Math.pow(0.5, dt);
+                }
+
+                carRoot.position.set(carState.x, carState.y, carState.z);
+                carRoot.rotation.set(0, carState.heading, 0);
+
+                carBodyTilt.position.y = carState.suspensionOffset;
+                carBodyTilt.rotation.order = 'YXZ';
+                carBodyTilt.rotation.x = carState.pitch;
+                carBodyTilt.rotation.z = carState.roll;
+
+                carState.wheelSpin -= (forwardSpeed / 0.42) * dt;
+                wheels.forEach(w => {
+                    if (w.isFront) w.steerPivot.rotation.y = carState.steerAngle;
+                    w.wheelMesh.rotation.x = carState.wheelSpin;
+                });
+
+                // --- B. JEJAK 4 BAN BERALUR TIMBUL & KEPULAN DEBU PASIR / CIPRATAN AIR ---
+                const currentWheelPositions = [
+                    new THREE.Vector3(flX, hFL, flZ),
+                    new THREE.Vector3(frX, hFR, frZ),
+                    new THREE.Vector3(rlX, hRL, rlZ),
+                    new THREE.Vector3(rrX, hRR, rrZ)
+                ];
+
+                if (!wheelTrackInitialized) {
+                    for (let w = 0; w < 4; w++) {
+                        lastWheelTrackPos[w].copy(currentWheelPositions[w]);
+                    }
+                    wheelTrackInitialized = true;
+                } else if (carState.isGrounded && !centerSurf.isPier) {
+                    for (let w = 0; w < 4; w++) {
+                        const prev = lastWheelTrackPos[w];
+                        const curr = currentWheelPositions[w];
+                        const dist = Math.hypot(curr.x - prev.x, curr.z - prev.z);
+                        if (dist >= 0.42) {
+                            addRecessedTireSegment(prev.x, prev.z, curr.x, curr.z);
+                            prev.copy(curr);
+                        }
+                    }
+                } else {
+                    for (let w = 0; w < 4; w++) {
+                        lastWheelTrackPos[w].copy(currentWheelPositions[w]);
+                    }
+                }
+
+                const isDriftingHard = carState.isGrounded && (Math.abs(lateralSpeed) > 2.2 || (isHandbraking && newTotalSpeed > 3.5) || Math.abs(carState.angularVel) > 0.9);
+                const isMovingFast = carState.isGrounded && newTotalSpeed > 3.2;
+
+                if (isDriftingHard || isMovingFast) {
+                    const count = isDriftingHard ? 3 : 1;
+                    for (let c = 0; c < count; c++) {
+                        for (let idx of [2, 3]) {
+                            const wPos = currentWheelPositions[idx];
+                            const wheelInWater = wPos.y < WATER_LEVEL + 0.14;
+                            const jitterX = (Math.random() - 0.5) * 0.65;
+                            const jitterZ = (Math.random() - 0.5) * 0.65;
+
+                            const pVx = -carState.vx * 0.16 + (Math.random() - 0.5) * 2.2;
+                            const pVz = -carState.vz * 0.16 + (Math.random() - 0.5) * 2.2;
+                            const pVy = wheelInWater ? (1.8 + Math.random() * 2.5) : (0.65 + Math.random() * 1.35);
+
+                            const scaleStart = isDriftingHard ? 0.68 : 0.42;
+                            const scaleEnd = isDriftingHard ? (2.9 + Math.random() * 2.1) : 1.85;
+                            const life = isDriftingHard ? (0.85 + Math.random() * 0.55) : 0.55;
+                            const opacity = wheelInWater ? 0.65 : (isDriftingHard ? 0.44 : 0.24);
+
+                            spawnDustPuff(wPos.x + jitterX, wPos.y + 0.22, wPos.z + jitterZ, pVx, pVy, pVz, scaleStart, scaleEnd, life, opacity, wheelInWater);
+                        }
+                    }
+                }
+
+                for (let i = 0; i < MAX_DUST_PARTICLES; i++) {
+                    const p = dustParticles[i];
+                    if (!p.active) continue;
+                    p.age += dt;
+                    if (p.age >= p.maxAge) {
+                        p.active = false;
+                        p.mesh.visible = false;
+                        continue;
+                    }
+                    const t = p.age / p.maxAge;
+                    const easeOut = 1 - Math.pow(1 - t, 2);
+
+                    p.mesh.position.x += p.vx * dt;
+                    p.mesh.position.y += p.vy * dt;
+                    p.mesh.position.z += p.vz * dt;
+                    p.vx *= Math.pow(0.35, dt);
+                    p.vz *= Math.pow(0.35, dt);
+
+                    p.mesh.scale.setScalar(THREE.MathUtils.lerp(p.startScale, p.endScale, easeOut));
+                    p.mesh.material.opacity = p.maxOpacity * (1 - t) * (1 - t * 0.5);
+                }
+
+                // --- C. UPDATE KAMERA & MATAHARI ---
+                const desiredTargetX = carState.x + carState.vx * 0.22;
+                const desiredTargetZ = carState.z + carState.vz * 0.22;
+                cameraTarget.x += (desiredTargetX - cameraTarget.x) * Math.min(1, dt * 5.0);
+                cameraTarget.z += (desiredTargetZ - cameraTarget.z) * Math.min(1, dt * 5.0);
+                cameraTarget.y += (carState.y - cameraTarget.y) * Math.min(1, dt * 5.0);
+
+                if (cameraMode === 0) {
+                    camera.fov = 26;
+                    camera.updateProjectionMatrix();
+                    camera.position.set(
+                        cameraTarget.x + cameraOffset.x,
+                        cameraTarget.y + cameraOffset.y,
+                        cameraTarget.z + cameraOffset.z
+                    );
+                    camera.lookAt(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+                } else if (cameraMode === 1) {
+                    camera.fov = 48;
+                    camera.updateProjectionMatrix();
+                    const chaseX = carState.x - fwdX * 11.5;
+                    const chaseZ = carState.z - fwdZ * 11.5;
+                    const chaseY = carState.y + 4.8;
+                    camera.position.lerp(new THREE.Vector3(chaseX, chaseY, chaseZ), Math.min(1, dt * 6.5));
+                    camera.lookAt(carState.x + fwdX * 6.0, carState.y + 1.2, carState.z + fwdZ * 6.0);
+                } else {
+                    camera.fov = 34;
+                    camera.updateProjectionMatrix();
+                    camera.position.set(cameraTarget.x, cameraTarget.y + 105, cameraTarget.z + 88);
+                    camera.lookAt(cameraTarget.x, cameraTarget.y, cameraTarget.z);
+                }
+
+                const snapX = Math.round(cameraTarget.x * 2) * 0.5;
+                const snapZ = Math.round(cameraTarget.z * 2) * 0.5;
+                sunLight.target.position.set(snapX, cameraTarget.y, snapZ);
+                sunLight.position.set(
+                    snapX + sunOffset.x,
+                    cameraTarget.y + sunOffset.y,
+                    snapZ + sunOffset.z
+                );
+
+                // --- D. UPDATE AUDIO MESIN, DRIFT & DEBURAN OMBAK PANTAI ---
+                if (audioCtx && engineOsc && engineGain && skidGain) {
+                    const targetFreq = 54 + Math.min(195, newTotalSpeed * 4.8) + (isDriftingHard ? 24 : 0);
+                    engineOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.05);
+                    engineGain.gain.setTargetAtTime(0.03 + Math.min(0.06, newTotalSpeed * 0.002), audioCtx.currentTime, 0.08);
+
+                    const targetSkid = isDriftingHard ? Math.min(0.11, Math.abs(lateralSpeed) * 0.015 + 0.03) : 0.0;
+                    skidGain.gain.setTargetAtTime(targetSkid, audioCtx.currentTime, 0.06);
+
+                    if (surfNoiseGain) {
+                        const distToCoast = Math.abs(getCoastlineSignedDistance(carState.x, carState.z));
+                        const surfVol = THREE.MathUtils.clamp((1.0 - distToCoast / 42.0) * 0.045, 0.0, 0.045) * (0.7 + 0.3 * Math.sin(now * 0.002));
+                        surfNoiseGain.gain.setTargetAtTime(surfVol, audioCtx.currentTime, 0.12);
+                    }
+                }
+
+                // --- E. ANIMASI OMBAK LAUT, BUSA BERENDA & KILATAN CAHAYA AIR ---
+                const waveTime = now * 0.0022;
+                oceanWaveTex.offset.x = waveTime * 0.08;
+                oceanWaveTex.offset.y = -waveTime * 0.12;
+
+                const wPos = waterGeo.attributes.position;
+                for (let i = 0; i < wPos.count; i++) {
+                    const wx = waterBasePos[i * 3];
+                    const wz = waterBasePos[i * 3 + 2];
+                    const cDist = waterCoastDist[i];
+                    if (cDist < -3.5) {
+                        wPos.setY(i, -18.0);
+                        continue;
+                    }
+                    const amp = cDist < 6.0 ? 0.05 : 0.15;
+                    const waveH = (Math.sin(wx * 0.11 + waveTime) + Math.cos(wz * 0.13 + waveTime * 1.15)) * amp;
+                    wPos.setY(i, waveH);
+                }
+                wPos.needsUpdate = true;
+
+                // Animasi sapuan maju-mundur Ombak Busa Berenda (Lacy Sea Foam Swash)
+                lacyFoamTex.offset.x = Math.sin(waveTime * 0.5) * 0.15;
+                const swash1 = Math.sin(waveTime * 1.15);
+                const swash2 = Math.cos(waveTime * 1.15);
+                foamRibbonPrimary.mesh.position.y = 0.01 * swash1;
+                foamRibbonPrimary.mat.opacity = foamRibbonPrimary.baseOpacity * (0.78 + 0.22 * swash1);
+                foamRibbonSecondary.mat.opacity = foamRibbonSecondary.baseOpacity * (0.72 + 0.28 * swash2);
+
+                // Animasi kelap-kelip ribuan Kilatan Cahaya Matahari di Air (Water Sun Sparkles)
+                const sPos = sparkleGeo.attributes.position;
+                for (let i = 0; i < sparkleCount; i++) {
+                    const phase = sparklePhases[i] + waveTime * 3.4;
+                    const twinkle = Math.sin(phase);
+                    const bx = sparkleBasePositions[i * 2];
+                    const bz = sparkleBasePositions[i * 2 + 1];
+                    const sy = twinkle > 0.15 ? WATER_LEVEL + 0.12 : WATER_LEVEL - 0.5;
+                    sPos.setXYZ(i, bx + Math.sin(phase * 0.5) * 0.25, sy, bz + Math.cos(phase * 0.5) * 0.25);
+                }
+                sPos.needsUpdate = true;
+
+                // --- F. ANIMASI KINCIR ANGIN, MERCUSUAR & PERAHU LAUT ---
+                for (let i = 0; i < animatedWindmills.length; i++) {
+                    animatedWindmills[i].hub.rotation.z += animatedWindmills[i].speed * dt;
+                }
+                if (lighthouseBeaconGroup) {
+                    lighthouseBeaconGroup.rotation.y += 1.35 * dt;
+                }
+                for (let i = 0; i < floatingBoats.length; i++) {
+                    const b = floatingBoats[i];
+                    const bWave = waveTime * 1.3 + b.phase;
+                    b.group.position.y = WATER_LEVEL + 0.14 + Math.sin(bWave) * 0.11;
+                    b.group.rotation.x = Math.cos(bWave * 0.9) * 0.06;
+                    b.group.rotation.z = Math.sin(bWave * 1.1) * 0.08;
+                }
+
+                renderer.render(scene, camera);
+            }
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            animate(performance.now());
+        };
+    </script>
+</body>
+</html>
